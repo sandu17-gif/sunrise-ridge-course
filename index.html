@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Safe Handling and MSI Prevention</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ─── DESIGN TOKENS ─────────────────────────────── */
+    :root {
+      --primary:   #0475AC;
+      --teal:      #1CC0E0;
+      --accent:    #D97706;
+      --light-bg:  #E0F2FE;
+      --pale:      #F3F4F6;
+      --border:    #E0E0E0;
+      --text:      #333333;
+      --muted:     #555555;
+      --white:     #ffffff;
+      --radius:    12px;
+      --font:      'Inter', sans-serif;
+      --nav-h:     52px;
+      --progress-h: 4px;
+    }
+
+    /* ─── RESET ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: var(--font); color: var(--text); background: #f7f8fa; }
+
+    /* ─── TOP BAR ────────────────────────────────────── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: var(--white);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    #nav {
+      height: var(--nav-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px;
+    }
+    #course-title-nav {
+      font-size: 14px; font-weight: 600; color: var(--primary);
+      flex: 1; text-align: center;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      padding: 0 8px;
+    }
+    #hamburger {
+      width: 36px; height: 36px; border: none; background: none;
+      cursor: pointer; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; gap: 5px;
+      border-radius: 8px; transition: background 0.15s;
+    }
+    #hamburger:hover { background: var(--pale); }
+    #hamburger span {
+      display: block; width: 20px; height: 2px;
+      background: var(--text); border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    #hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    #hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    #hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* progress bar */
+    #progress-bar {
+      height: var(--progress-h);
+      background: var(--border);
+      position: relative;
+    }
+    #progress-fill {
+      height: 100%; background: var(--primary);
+      border-radius: 0 2px 2px 0;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+
+    /* ─── SLIDE-IN MENU ──────────────────────────────── */
+    #menu-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.4);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #menu-overlay.open { opacity: 1; pointer-events: all; }
+
+    #menu-panel {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: min(320px, 85vw);
+      background: var(--white);
+      transform: translateX(-100%);
+      transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #menu-overlay.open #menu-panel { transform: translateX(0); }
+
+    #menu-header {
+      padding: 20px 20px 16px;
+      background: var(--primary);
+      color: var(--white);
+    }
+    #menu-header .menu-course-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; opacity: 0.7; margin-bottom: 4px;
+    }
+    #menu-header .menu-course-name {
+      font-size: 16px; font-weight: 700; line-height: 1.3;
+    }
+
+    #menu-lessons {
+      flex: 1; overflow-y: auto; padding: 8px 0;
+    }
+    .menu-lesson {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid var(--border);
+    }
+    .menu-lesson:hover { background: var(--pale); }
+    .menu-lesson.active { background: var(--light-bg); }
+    .menu-lesson.locked { opacity: 0.45; cursor: default; }
+
+    .lesson-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 11px; font-weight: 700;
+      background: var(--border); color: var(--muted);
+      border: 2px solid var(--border);
+      transition: all 0.2s;
+    }
+    .menu-lesson.completed .lesson-dot {
+      background: var(--primary); color: var(--white); border-color: var(--primary);
+    }
+    .menu-lesson.active .lesson-dot {
+      background: var(--white); color: var(--primary); border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(4,117,172,0.15);
+    }
+    .lesson-dot-check { display: none; }
+    .menu-lesson.completed .lesson-dot-check { display: block; }
+    .menu-lesson.completed .lesson-dot-num { display: none; }
+
+    .menu-lesson-title {
+      font-size: 14px; font-weight: 500; color: var(--text); line-height: 1.3;
+    }
+    .menu-lesson.active .menu-lesson-title { font-weight: 700; color: var(--primary); }
+
+    /* ─── CONTENT AREA ───────────────────────────────── */
+    #content-area {
+      position: fixed;
+      top: calc(var(--nav-h) + var(--progress-h));
+      left: 0; right: 0; bottom: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── SLIDES ─────────────────────────────────────── */
+    .slide { display: none; min-height: 100%; padding-bottom: 100px; }
+    .slide.active { display: block; }
+
+    /* ─── COVER SLIDE ────────────────────────────────── */
+    #slide-cover {
+      min-height: 100%;
+      display: none;
+      flex-direction: column;
+      background: linear-gradient(160deg, #f0f9ff 0%, #e0f2fe 60%, #bae6fd 100%);
+    }
+    #slide-cover.active { display: flex; }
+
+    .cover-top {
+      padding: 40px 24px 24px;
+      text-align: center;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: var(--primary);
+      color: var(--white);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 20px;
+      margin-bottom: 20px;
+    }
+    .cover-title {
+      font-size: clamp(22px, 6vw, 32px);
+      font-weight: 700; color: var(--primary);
+      line-height: 1.2; margin-bottom: 12px;
+    }
+    .cover-subtitle {
+      font-size: 15px; color: var(--muted); line-height: 1.6;
+      max-width: 340px; margin: 0 auto 32px;
+    }
+    .cover-meta {
+      display: flex; justify-content: center; gap: 24px;
+      margin-bottom: 32px;
+    }
+    .cover-meta-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .cover-meta-icon { font-size: 20px; }
+    .cover-meta-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    .cover-meta-value { font-size: 14px; color: var(--text); font-weight: 700; }
+
+    .cover-image {
+      width: 100%; max-height: 220px; object-fit: cover;
+    }
+    .cover-card {
+      margin: 20px 20px 0;
+      background: var(--white); border-radius: var(--radius);
+      padding: 20px; box-shadow: 0 2px 12px rgba(4,117,172,0.08);
+      border-left: 4px solid var(--primary);
+    }
+    .cover-card p { font-size: 16px; line-height: 1.7; color: var(--text); }
+
+    /* ─── LESSON HEADER ──────────────────────────────── */
+    .lesson-header {
+      background: var(--primary);
+      padding: 24px 20px 20px;
+      color: var(--white);
+    }
+    .lesson-number {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; opacity: 0.7; margin-bottom: 6px;
+    }
+    .lesson-title {
+      font-size: clamp(18px, 5vw, 24px); font-weight: 700; line-height: 1.25;
+    }
+
+    /* ─── CONTENT BLOCKS ─────────────────────────────── */
+    .block { padding: 20px; }
+    .block-text p { font-size: 17px; line-height: 1.7; color: var(--text); }
+    .block-text p + p { margin-top: 14px; }
+    .block-text h2 {
+      font-size: 17px; font-weight: 700; color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .block-divider { height: 1px; background: var(--border); margin: 4px 20px; }
+
+    .block-image img {
+      width: 100%; border-radius: var(--radius);
+      display: block;
+    }
+
+    /* ─── CALLOUT CARD ───────────────────────────────── */
+    .callout-card {
+      background: var(--pale); border-radius: var(--radius);
+      border-left: 4px solid var(--teal);
+      padding: 16px 18px; margin: 0 20px 20px;
+    }
+    .callout-card.amber { border-left-color: var(--accent); background: #FEF9EE; }
+    .callout-card p { font-size: 16px; line-height: 1.65; color: var(--text); }
+
+    /* ─── DIALOGUE SCENE ─────────────────────────────── */
+    .dialogue-scene {
+      position: relative; width: 100%;
+      background: #1a2234;
+      overflow: hidden;
+    }
+    .dialogue-bg {
+      width: 100%; display: block;
+      aspect-ratio: 4/3; object-fit: cover;
+      opacity: 0.7;
+    }
+    .dialogue-bubble-area {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+      padding: 20px 16px 16px;
+    }
+    .dialogue-speaker {
+      font-size: 12px; font-weight: 700; color: var(--teal);
+      letter-spacing: 0.07em; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .dialogue-text {
+      font-size: 16px; line-height: 1.6; color: var(--white);
+    }
+    .dialogue-nav {
+      display: flex; justify-content: flex-end; margin-top: 12px;
+    }
+    .dialogue-next-btn {
+      background: var(--primary); color: var(--white);
+      border: none; border-radius: 8px;
+      padding: 8px 18px; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: var(--font);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ─── POPUP OVERLAY (the Rise-impossible one!) ────── */
+    #popup-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    #popup-overlay.open {
+      opacity: 1; pointer-events: all;
+    }
+    .popup-card {
+      background: var(--white); border-radius: var(--radius);
+      width: 100%; max-width: 480px;
+      max-height: 80vh; overflow-y: auto;
+      transform: translateY(16px) scale(0.97);
+      transition: transform 0.25s ease;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    #popup-overlay.open .popup-card {
+      transform: translateY(0) scale(1);
+    }
+    .popup-image {
+      width: 100%; aspect-ratio: 16/9; object-fit: cover;
+      border-radius: var(--radius) var(--radius) 0 0;
+      display: block;
+    }
+    .popup-body { padding: 20px; }
+    .popup-title {
+      font-size: 17px; font-weight: 700; color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .popup-text {
+      font-size: 16px; line-height: 1.65; color: var(--text);
+    }
+    .popup-close {
+      display: block; width: 100%; margin-top: 20px;
+      background: var(--primary); color: var(--white);
+      border: none; border-radius: 8px; padding: 13px;
+      font-size: 16px; font-weight: 600; cursor: pointer;
+      font-family: var(--font);
+    }
+
+    /* ─── CLICKABLE IMAGE (triggers popup) ───────────── */
+    .image-tap-reveal {
+      position: relative; cursor: pointer; border-radius: var(--radius);
+      overflow: hidden; display: block;
+    }
+    .image-tap-reveal img { width: 100%; display: block; }
+    .image-tap-hint {
+      position: absolute; bottom: 10px; right: 10px;
+      background: rgba(4,117,172,0.9); color: var(--white);
+      font-size: 12px; font-weight: 600;
+      padding: 5px 10px; border-radius: 20px;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    /* ─── CONTINUE BUTTON ────────────────────────────── */
+    #continue-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 12px 20px;
+      background: linear-gradient(to top, var(--white) 70%, transparent);
+      z-index: 50;
+    }
+    #continue-btn {
+      width: 100%; padding: 15px;
+      background: var(--primary); color: var(--white);
+      border: none; border-radius: var(--radius);
+      font-size: 17px; font-weight: 600; cursor: pointer;
+      font-family: var(--font);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      box-shadow: 0 4px 16px rgba(4,117,172,0.3);
+      transition: background 0.15s, transform 0.1s;
+    }
+    #continue-btn:active { transform: scale(0.98); }
+    #continue-btn:disabled { background: var(--border); color: var(--muted); box-shadow: none; cursor: default; }
+    #continue-btn svg { width: 18px; height: 18px; }
+
+    /* last slide: no continue button */
+    #continue-bar.hidden { display: none; }
+
+    /* ─── COMPLETION SLIDE ───────────────────────────── */
+    .completion-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 48px 24px;
+      min-height: 100%;
+    }
+    .completion-icon { font-size: 64px; margin-bottom: 20px; }
+    .completion-title {
+      font-size: 24px; font-weight: 700; color: var(--primary);
+      margin-bottom: 12px;
+    }
+    .completion-text {
+      font-size: 17px; color: var(--muted); line-height: 1.65;
+      max-width: 320px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <nav id="nav">
+    <button id="hamburger" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
+    <div id="course-title-nav">Safe Handling and MSI Prevention</div>
+    <div style="width:36px"></div>
+  </nav>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+</div>
+
+<!-- SLIDE-IN MENU -->
+<div id="menu-overlay" role="dialog" aria-modal="true" aria-label="Course navigation">
+  <div id="menu-panel">
+    <div id="menu-header">
+      <div class="menu-course-label">Sunrise Ridge</div>
+      <div class="menu-course-name">Safe Handling and MSI Prevention</div>
+    </div>
+    <div id="menu-lessons"></div>
+  </div>
+</div>
+
+<!-- POPUP OVERLAY -->
+<div id="popup-overlay" role="dialog" aria-modal="true">
+  <div class="popup-card">
+    <img class="popup-image" id="popup-img" src="" alt="" style="display:none">
+    <div class="popup-body">
+      <div class="popup-title" id="popup-title"></div>
+      <div class="popup-text" id="popup-text"></div>
+      <button class="popup-close" onclick="closePopup()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT AREA -->
+<div id="content-area">
+
+  <!-- ── SLIDE 0: COVER ── -->
+  <div class="slide active" id="slide-0">
+    <div style="background: linear-gradient(160deg, #f0f9ff 0%, #e0f2fe 60%, #bae6fd 100%); min-height: 100%; display: flex; flex-direction: column;">
+      <div class="cover-top">
+        <div class="cover-badge">Sunrise Ridge</div>
+        <h1 class="cover-title">Safe Handling and MSI Prevention</h1>
+        <p class="cover-subtitle">A story-based course for residential care workers</p>
+        <div class="cover-meta">
+          <div class="cover-meta-item">
+            <span class="cover-meta-icon">📱</span>
+            <span class="cover-meta-label">Format</span>
+            <span class="cover-meta-value">Mobile-first</span>
+          </div>
+          <div class="cover-meta-item">
+            <span class="cover-meta-icon">⏱</span>
+            <span class="cover-meta-label">Time</span>
+            <span class="cover-meta-value">~25 min</span>
+          </div>
+          <div class="cover-meta-item">
+            <span class="cover-meta-icon">📋</span>
+            <span class="cover-meta-label">Lessons</span>
+            <span class="cover-meta-value">5</span>
+          </div>
+        </div>
+      </div>
+      <div class="cover-card">
+        <p>You are fourteen months into the job at Sunrise Ridge. You know the wings, the residents, and the rhythms of a shift. Today is different — Priya is back.</p>
+      </div>
+      <div style="flex:1; min-height: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 1: LESSON 1 ── -->
+  <div class="slide" id="slide-1">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 1 of 5</div>
+      <div class="lesson-title">Before you begin</div>
+    </div>
+    <div class="block block-text">
+      <p>You are fourteen months into the job at Sunrise Ridge. You know the wings, the residents, and the rhythms of a shift. Today is different...</p>
+      <p style="margin-top:16px; font-weight:700; color: var(--primary); font-size:17px; text-align:center;">Priya is back!!</p>
+      <p style="margin-top:12px;">She has been off for six weeks with a lower back strain from a repositioning task. Experienced, careful, does not cut corners. She got hurt anyway.</p>
+      <p style="margin-top:12px;">Linda has asked you to be her buddy for the morning. Not to supervise, just to be a second set of hands and a familiar face.</p>
+      <p style="margin-top:12px;">What happened to Priya is not unusual. Musculoskeletal injuries are the leading cause of lost time in BC residential care.</p>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 2: LESSON 2 ── -->
+  <div class="slide" id="slide-2">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 2 of 5</div>
+      <div class="lesson-title">She's back!</div>
+    </div>
+    <div class="block block-text">
+      <p>You walk into the staff room, and Priya looks up from her mug.</p>
+    </div>
+
+    <!-- Tap image to reveal more — the Rise-impossible popup -->
+    <div class="block" style="padding-top:0">
+      <div class="image-tap-reveal" onclick="openPopup('priya-popup')">
+        <img src="assets/priya-staffroom.jpg" alt="Priya in the staff room" onerror="this.style.background='#e0f2fe';this.style.height='200px';this.src=''">
+        <div class="image-tap-hint">
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          Tap to read
+        </div>
+      </div>
+    </div>
+
+    <div class="block block-text">
+      <p>"Hey. You are my buddy today, apparently. Stiff in the mornings but better by ten. Cleared for regular tasks with a second person. Nothing solo until week three. Linda will go over the rest." She says it matter-of-factly. Not looking for sympathy.</p>
+    </div>
+    <div class="callout-card amber" style="margin:0 20px 20px">
+      <p>Injuries can happen to the careful ones too. Musculoskeletal injuries (MSI) are the leading cause of lost time for care workers in BC.</p>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 3: LESSON 3 ── -->
+  <div class="slide" id="slide-3">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 3 of 5</div>
+      <div class="lesson-title">Meeting Mrs. Okonwo</div>
+    </div>
+    <div class="block block-text">
+      <p>She arrived yesterday. Here is what you need to know.</p>
+    </div>
+    <div class="callout-card">
+      <p>Priya mentions she has not used a ceiling track lift since her training two years ago. She knows the steps — she just wants to take it slow. You will go through it together before you start.</p>
+    </div>
+    <div class="block block-text">
+      <p>You and Priya are about to enter Mrs. Okonwo's room for the first time. You run through the pre-task risk check mentally.</p>
+    </div>
+    <div class="block block-text">
+      <p>You knock and step in slowly. Mrs. Okonwo looks at you and then at Priya.</p>
+    </div>
+    <div class="block" style="padding-top:0">
+      <div class="image-tap-reveal" onclick="openPopup('room-popup')">
+        <img src="assets/mrs-okonwo-room.jpg" alt="Mrs Okonwo's room" onerror="this.style.background='#e0f2fe';this.style.height='200px';this.src=''">
+        <div class="image-tap-hint">
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          Tap to observe the room
+        </div>
+      </div>
+    </div>
+    <div class="block block-text">
+      <p>You and Priya confirm the sling fit together, talking through each step with Mrs. Okonwo before moving. Eleven minutes later she is in the chair by the window, a pillow supporting her left side.</p>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 4: LESSON 4 ── -->
+  <div class="slide" id="slide-4">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 4 of 5</div>
+      <div class="lesson-title">At Cedar Wing: The Habits Get Tested</div>
+    </div>
+    <div class="block block-text">
+      <p>You head to Cedar Wing for Mr. Kowalski's morning repositioning. His handling plan indicates a two-person assist for all bed repositioning, using the slide sheet and a repositioning belt. No lift required if he can partially assist.</p>
+      <p style="margin-top:12px;">Priya pauses in the hallway, one hand on the wall. A twinge. It comes and goes, she says. You wait.</p>
+    </div>
+    <div class="block block-text">
+      <p style="font-weight:700; color: var(--primary);">Later in the day...</p>
+      <p style="margin-top:10px;">You are in the lounge with coffee when Jonah comes over and sits down.</p>
+    </div>
+    <div class="callout-card">
+      <p>Priya puts down her mug and listens. Jonah had been helping with a transfer earlier that morning. The other aide said they could skip the stand aid. The resident was small, cooperative. It would be faster. "The handling plan said two-person assist with the stand aid," Jonah said. "I knew that. I just went along with it."</p>
+    </div>
+    <div class="block block-text">
+      <p style="font-weight:700; color: var(--primary);">A critical moment:</p>
+      <p style="margin-top:10px;">Mrs. Okonwo has reported pain during the lift. You are mid-transfer. She is suspended above the chair. Priya has stopped the remote.</p>
+      <p style="margin-top:12px;"><strong>Do you lower her back to the chair immediately?</strong></p>
+    </div>
+    <div style="display:flex; gap:12px; padding: 0 20px 20px;">
+      <button onclick="answerDecision(this,'yes')" style="flex:1; padding:14px; border-radius:10px; border:1.5px solid var(--border); background:var(--white); font-family:var(--font); font-size:16px; font-weight:600; cursor:pointer; transition: all 0.2s;">Yes</button>
+      <button onclick="answerDecision(this,'no')" style="flex:1; padding:14px; border-radius:10px; border:1.5px solid var(--border); background:var(--white); font-family:var(--font); font-size:16px; font-weight:600; cursor:pointer; transition: all 0.2s;">No</button>
+    </div>
+    <div id="decision-feedback" style="display:none" class="callout-card"></div>
+  </div>
+
+  <!-- ── SLIDE 5: LESSON 5 ── -->
+  <div class="slide" id="slide-5">
+    <div class="lesson-header">
+      <div class="lesson-number">Lesson 5 of 5</div>
+      <div class="lesson-title">An Honest Moment...</div>
+    </div>
+    <div class="completion-wrap">
+      <div class="completion-icon">✅</div>
+      <div class="completion-title">Well done!</div>
+      <p class="completion-text">When we show up to the present moment with all of our senses, we invite the world to fill us with joy. The pains of the past are behind us. The future has yet to unfold. But the now is full of beauty simply waiting for our attention.</p>
+      <p style="margin-top:24px; font-size:14px; color: var(--muted);">Your completion has been recorded.</p>
+    </div>
+  </div>
+
+</div><!-- /content-area -->
+
+<!-- CONTINUE BUTTON -->
+<div id="continue-bar">
+  <button id="continue-btn" onclick="nextSlide()">
+    Continue
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>
+
+<!-- POPUPS DATA -->
+<script>
+const POPUPS = {
+  'priya-popup': {
+    title: 'About Priya',
+    text: 'Priya has been a care aide at Sunrise Ridge for four years. She is known for being thorough with handling plans and always asking for a second person. Her injury happened during a routine repositioning — the resident shifted unexpectedly and Priya took the full load. Six weeks off. A reminder that good habits reduce risk but cannot eliminate it entirely.',
+    image: null
+  },
+  'room-popup': {
+    title: 'What the room tells you',
+    text: 'Ceiling track lift above the bed — good. Sling is hanging on the hook by the door, not under the mattress. The bed height is set low. A grab bar is on the left side. Mrs. Okonwo is sitting up at about 30 degrees. She looks alert but cautious. The handling plan on the clipboard matches what you were briefed on.',
+    image: null
+  }
+};
+</script>
+
+<!-- COURSE ENGINE -->
+<script>
+// ── State ─────────────────────────────────────
+const TOTAL_SLIDES = 6; // 0 = cover, 1-5 = lessons
+let currentSlide = 0;
+let completedSlides = new Set();
+
+// ── SCORM (silent if no LMS) ──────────────────
+const SCORM = {
+  api: null,
+  init() {
+    try {
+      this.api = window.API || window.parent?.API || null;
+      if (this.api) { this.api.LMSInitialize(''); }
+    } catch(e) {}
+  },
+  set(key, val) {
+    try { if (this.api) this.api.LMSSetValue(key, val); } catch(e) {}
+  },
+  get(key) {
+    try { return this.api ? this.api.LMSGetValue(key) : null; } catch(e) { return null; }
+  },
+  commit() {
+    try { if (this.api) this.api.LMSCommit(''); } catch(e) {}
+  },
+  finish() {
+    try { if (this.api) this.api.LMSFinish(''); } catch(e) {}
+  }
+};
+
+// ── Navigation ────────────────────────────────
+function showSlide(index) {
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById('slide-' + index);
+  if (target) {
+    target.classList.add('active');
+    document.getElementById('content-area').scrollTo(0, 0);
+  }
+  currentSlide = index;
+  updateProgress();
+  updateMenu();
+  updateContinueBtn();
+  SCORM.set('cmi.core.lesson_location', index);
+  SCORM.commit();
+}
+
+function nextSlide() {
+  completedSlides.add(currentSlide);
+  if (currentSlide < TOTAL_SLIDES - 1) {
+    showSlide(currentSlide + 1);
+  }
+  if (currentSlide === TOTAL_SLIDES - 1) {
+    SCORM.set('cmi.core.lesson_status', 'completed');
+    SCORM.set('cmi.core.score.raw', '100');
+    SCORM.commit();
+    SCORM.finish();
+  }
+}
+
+// ── Progress Bar ──────────────────────────────
+function updateProgress() {
+  const pct = (currentSlide / (TOTAL_SLIDES - 1)) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+// ── Continue Button ───────────────────────────
+function updateContinueBtn() {
+  const bar = document.getElementById('continue-bar');
+  const btn = document.getElementById('continue-btn');
+  if (currentSlide === TOTAL_SLIDES - 1) {
+    bar.classList.add('hidden');
+  } else {
+    bar.classList.remove('hidden');
+    btn.textContent = currentSlide === 0 ? 'Start' : 'Continue';
+    if (currentSlide > 0) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none');
+      svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width','2.5');
+      svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+      svg.style.cssText = 'width:18px;height:18px;';
+      svg.innerHTML = '<path d="M9 18l6-6-6-6"/>';
+      btn.appendChild(svg);
+    }
+  }
+}
+
+// ── Hamburger Menu ────────────────────────────
+const LESSONS = [
+  { title: 'Cover' },
+  { title: 'Before you begin' },
+  { title: "She's back!" },
+  { title: 'Meeting Mrs. Okonwo' },
+  { title: 'At Cedar Wing: The Habits Get Tested' },
+  { title: 'An Honest Moment...' }
+];
+
+function buildMenu() {
+  const container = document.getElementById('menu-lessons');
+  // skip slide 0 (cover) or show it too — your choice
+  LESSONS.forEach((lesson, i) => {
+    const div = document.createElement('div');
+    div.className = 'menu-lesson' + (i === 0 ? ' active' : ' locked');
+    div.dataset.index = i;
+    div.innerHTML = `
+      <div class="lesson-dot">
+        <span class="lesson-dot-num">${i + 1}</span>
+        <span class="lesson-dot-check">✓</span>
+      </div>
+      <div class="menu-lesson-title">${lesson.title}</div>
+    `;
+    div.addEventListener('click', () => {
+      if (!div.classList.contains('locked')) {
+        showSlide(i);
+        closeMenu();
+      }
+    });
+    container.appendChild(div);
+  });
+}
+
+function updateMenu() {
+  document.querySelectorAll('.menu-lesson').forEach((el, i) => {
+    el.classList.remove('active','completed','locked');
+    if (i === currentSlide) el.classList.add('active');
+    else if (i < currentSlide || completedSlides.has(i)) el.classList.add('completed');
+    else el.classList.add('locked');
+  });
+}
+
+const hamburger = document.getElementById('hamburger');
+const menuOverlay = document.getElementById('menu-overlay');
+
+hamburger.addEventListener('click', () => {
+  const isOpen = menuOverlay.classList.contains('open');
+  isOpen ? closeMenu() : openMenu();
+});
+
+menuOverlay.addEventListener('click', (e) => {
+  if (e.target === menuOverlay) closeMenu();
+});
+
+function openMenu() {
+  menuOverlay.classList.add('open');
+  hamburger.classList.add('open');
+  hamburger.setAttribute('aria-expanded','true');
+}
+function closeMenu() {
+  menuOverlay.classList.remove('open');
+  hamburger.classList.remove('open');
+  hamburger.setAttribute('aria-expanded','false');
+}
+
+// ── Popup System ──────────────────────────────
+function openPopup(id) {
+  const data = POPUPS[id];
+  if (!data) return;
+  document.getElementById('popup-title').textContent = data.title;
+  document.getElementById('popup-text').textContent = data.text;
+  const img = document.getElementById('popup-img');
+  if (data.image) { img.src = data.image; img.style.display = 'block'; }
+  else { img.style.display = 'none'; }
+  document.getElementById('popup-overlay').classList.add('open');
+}
+function closePopup() {
+  document.getElementById('popup-overlay').classList.remove('open');
+}
+// close on backdrop click
+document.getElementById('popup-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('popup-overlay')) closePopup();
+});
+
+// ── Decision Interaction ───────────────────────
+function answerDecision(btn, answer) {
+  const allBtns = btn.parentElement.querySelectorAll('button');
+  const feedback = document.getElementById('decision-feedback');
+  allBtns.forEach(b => {
+    b.disabled = true;
+    b.style.opacity = '0.5';
+  });
+  btn.style.opacity = '1';
+  if (answer === 'yes') {
+    btn.style.background = '#0475AC';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#0475AC';
+    feedback.style.display = 'block';
+    feedback.style.borderLeftColor = '#16a34a';
+    feedback.style.background = '#f0fdf4';
+    feedback.innerHTML = '<p><strong>Correct.</strong> When a resident reports pain during a lift, stop immediately and lower them safely back to the nearest surface. Never continue a transfer when the resident is in distress.</p>';
+  } else {
+    btn.style.background = '#dc2626';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#dc2626';
+    feedback.style.display = 'block';
+    feedback.style.borderLeftColor = '#dc2626';
+    feedback.style.background = '#fef2f2';
+    feedback.innerHTML = '<p><strong>Not quite.</strong> When a resident reports pain mid-transfer, the safe response is to stop and lower them to the nearest stable surface. Continuing the transfer risks further injury.</p>';
+  }
+  feedback.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Init ──────────────────────────────────────
+SCORM.init();
+buildMenu();
+showSlide(0);
+</script>
+
+</body>
+</html>
