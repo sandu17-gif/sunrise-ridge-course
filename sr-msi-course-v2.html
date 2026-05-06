@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Safe Handling and MSI Prevention</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#0475AC;--primary-dk:#035580;--teal:#1CC0E0;--teal-lt:#E0F7FC;--amber:#D97706;--amber-lt:#FEF3C7;--green:#16A34A;--green-lt:#DCFCE7;--red:#DC2626;--red-lt:#FEE2E2;--text:#1A1A2E;--muted:#5A6070;--border:#E4E8EE;--bg:#F6F8FB;--white:#fff;--r:14px;--r-sm:8px;--nav-h:54px;--prog-h:3px;--body:'DM Sans',sans-serif;--display:'DM Serif Display',serif;--ease:cubic-bezier(0.4,0,0.2,1)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--body);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+button{font-family:var(--body);cursor:pointer}
+img{max-width:100%}
+/* TOP BAR */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--white);border-bottom:1px solid var(--border)}
+#nav{height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+#course-nav-title{font-size:13px;font-weight:700;color:var(--primary);flex:1;text-align:center;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hamburger{width:38px;height:38px;border:none;background:none;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;border-radius:var(--r-sm);transition:background .15s}
+#hamburger span{display:block;width:20px;height:2px;background:var(--text);border-radius:2px;transition:all .3s var(--ease)}
+#hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+#hamburger.open span:nth-child(2){opacity:0;transform:scaleX(0)}
+#hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+#progress-bar{height:var(--prog-h);background:var(--border)}
+#progress-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--primary));border-radius:0 2px 2px 0;transition:width .6s var(--ease);width:0%}
+/* MENU */
+#menu-overlay{position:fixed;inset:0;z-index:200;background:rgba(10,15,30,.5);opacity:0;pointer-events:none;transition:opacity .3s var(--ease);backdrop-filter:blur(2px)}
+#menu-overlay.open{opacity:1;pointer-events:all}
+#menu-panel{position:absolute;top:0;left:0;bottom:0;width:min(320px,88vw);background:var(--white);transform:translateX(-100%);transition:transform .35s var(--ease);display:flex;flex-direction:column}
+#menu-overlay.open #menu-panel{transform:translateX(0)}
+#menu-header{padding:20px 18px 16px;background:var(--primary);color:#fff;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#menu-header-text{flex:1}
+.menu-org{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.65;margin-bottom:4px}
+.menu-course-name{font-size:16px;font-weight:700;line-height:1.3}
+#menu-close{width:32px;height:32px;border:none;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;transition:background .15s}
+#menu-close:hover{background:rgba(255,255,255,.28)}
+#menu-lessons{flex:1;overflow-y:auto;padding:6px 0}
+.menu-lesson{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--border)}
+.menu-lesson:hover{background:var(--bg)}
+.menu-lesson.active{background:#EFF9FF}
+.menu-lesson.locked{opacity:.4;cursor:default}
+.lesson-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;background:var(--border);color:var(--muted);border:2px solid var(--border);transition:all .2s}
+.menu-lesson.completed .lesson-dot{background:var(--primary);color:#fff;border-color:var(--primary)}
+.menu-lesson.active .lesson-dot{background:#fff;color:var(--primary);border-color:var(--primary);box-shadow:0 0 0 3px rgba(4,117,172,.15)}
+.lesson-dot-check{display:none}
+.menu-lesson.completed .lesson-dot-check{display:block}
+.menu-lesson.completed .lesson-dot-num{display:none}
+.menu-lesson-title{font-size:14px;font-weight:500;color:var(--text);line-height:1.3}
+.menu-lesson.active .menu-lesson-title{font-weight:700;color:var(--primary)}
+/* CONTENT */
+#content-area{position:fixed;top:calc(var(--nav-h) + var(--prog-h));left:0;right:0;bottom:72px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.slide{display:none;min-height:100%}
+.slide.active{display:block}
+/* FADE UP */
+.fu{opacity:0;transform:translateY(22px);transition:opacity .55s var(--ease),transform .55s var(--ease)}
+.fu.visible{opacity:1;transform:translateY(0)}
+/* COVER */
+#slide-0{display:none;flex-direction:column;min-height:100%}
+#slide-0.active{display:flex}
+.cover-hero{position:relative;width:100%}
+.cover-hero img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
+.cover-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(4,40,80,.72) 0%,transparent 55%)}
+.cover-hero-text{position:absolute;bottom:20px;left:20px;right:20px;color:#fff}
+.cover-badge{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:10px}
+.cover-title{font-family:var(--display);font-size:clamp(20px,6vw,30px);line-height:1.2}
+.cover-body{padding:20px}
+.cover-desc{font-size:16px;line-height:1.7;color:var(--muted);margin-bottom:18px}
+.cover-meta{display:flex;gap:12px;flex-wrap:wrap}
+.cover-meta-item{display:flex;align-items:center;gap:8px;background:var(--white);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;border:1px solid var(--border)}
+.cover-meta-icon{font-size:18px}
+.cover-meta-label{font-size:11px;color:var(--muted);font-weight:500}
+.cover-meta-value{font-size:14px;font-weight:700;color:var(--text)}
+/* LESSON HEADER */
+.lesson-header{background:var(--primary);padding:24px 20px 20px;color:#fff}
+.lesson-num{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.65;margin-bottom:6px}
+.lesson-title-h{font-family:var(--display);font-size:clamp(20px,5vw,26px);line-height:1.2}
+/* TEXT BLOCKS */
+.block{padding:20px 20px 0}
+.block-text p{font-size:17px;line-height:1.75;color:var(--text)}
+.block-text p+p{margin-top:14px}
+.block-text strong{color:var(--primary)}
+.block-text em{font-style:italic;color:var(--muted)}
+.block-divider{height:1px;background:var(--border);margin:4px 20px}
+.block-image{padding:0 20px}
+.block-image img{width:100%;border-radius:var(--r);display:block}
+/* CALLOUT */
+.callout{border-radius:var(--r);padding:16px 18px;margin:0 20px}
+.callout-teal{background:var(--teal-lt);border-left:4px solid var(--teal)}
+.callout-amber{background:var(--amber-lt);border-left:4px solid var(--amber)}
+.callout p{font-size:16px;line-height:1.65;color:var(--text)}
+/* POPUP */
+#popup-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .25s var(--ease)}
+#popup-overlay.open{opacity:1;pointer-events:all}
+.popup-card{background:var(--white);border-radius:var(--r);width:100%;max-width:480px;max-height:82vh;overflow-y:auto;transform:translateY(16px) scale(.97);transition:transform .25s var(--ease);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#popup-overlay.open .popup-card{transform:translateY(0) scale(1)}
+.popup-img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r) var(--r) 0 0;display:block}
+.popup-body{padding:20px}
+.popup-title{font-size:17px;font-weight:700;color:var(--primary);margin-bottom:10px}
+.popup-text{font-size:16px;line-height:1.7;color:var(--text)}
+.popup-close{display:block;width:100%;margin-top:18px;background:var(--primary);color:#fff;border:none;border-radius:var(--r-sm);padding:13px;font-size:16px;font-weight:600}
+/* CONTINUE BAR */
+#continue-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px 14px;background:linear-gradient(to top,var(--white) 75%,transparent);z-index:50}
+#continue-btn{width:100%;padding:15px;background:var(--primary);color:#fff;border:none;border-radius:var(--r);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 18px rgba(4,117,172,.28);transition:background .15s,transform .1s}
+#continue-btn:active{transform:scale(.98)}
+#continue-bar.hidden{display:none}
+/* COMPLETION */
+.completion-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;padding:52px 24px 80px}
+.completion-icon{font-size:64px;margin-bottom:20px}
+.completion-title{font-family:var(--display);font-size:26px;color:var(--primary);margin-bottom:14px}
+.completion-text{font-size:17px;color:var(--muted);line-height:1.7;max-width:340px}
+.completion-badge{margin-top:28px;background:var(--green-lt);border:1.5px solid var(--green);border-radius:50px;padding:10px 24px;font-size:14px;font-weight:700;color:var(--green)}
+/* RTW DOC */
+.doc-wrap{background:#F3F4F6;border-radius:12px;padding:1.25rem}
+.doc-paper{background:#fff;border-radius:8px;border:1px solid #E0E0E0;overflow:hidden}
+.doc-header{background:#FEF3C7;border-bottom:2px solid #D97706;padding:14px 18px 12px;display:flex;align-items:flex-start;gap:12px}
+.doc-icon-box{width:36px;height:36px;background:#D97706;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:headerPop .5s cubic-bezier(0.34,1.56,0.64,1) both}
+.doc-icon-box svg{width:18px;height:18px}
+.doc-title{font-size:15px;font-weight:700;color:#633806;line-height:1.3;margin-bottom:2px}
+.doc-subtitle{font-size:13px;color:#854F0B;line-height:1.4}
+.doc-body{padding:16px 18px}
+.doc-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #E0E0E0;opacity:0;animation:rowFadeIn .4s ease forwards}
+.doc-row:last-child{border-bottom:none;padding-bottom:0}.doc-row:first-child{padding-top:0}
+.doc-row:nth-child(1){animation-delay:.15s}.doc-row:nth-child(2){animation-delay:.28s}.doc-row:nth-child(3){animation-delay:.41s}.doc-row:nth-child(4){animation-delay:.54s}.doc-row:nth-child(5){animation-delay:.67s}
+.row-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.row-icon svg{width:14px;height:14px;overflow:visible}
+.icon-green{background:#DCFCE7}.icon-amber{background:#FEF3C7}.icon-red{background:#FEE2E2}.icon-blue{background:#E0F2FE}
+.row-text{flex:1}
+.row-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.label-green{color:#16a34a}.label-amber{color:#D97706}.label-red{color:#dc2626}.label-blue{color:#0475AC}
+.row-desc{font-size:15px;color:#333;line-height:1.5}
+.doc-footer{background:#F3F4F6;border-top:1px solid #E0E0E0;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.footer-text{font-size:12px;color:#555;font-style:italic}
+.buddy-pill{font-size:11px;font-weight:600;background:#E0F2FE;color:#0475AC;padding:4px 12px;border-radius:20px}
+.check-path{stroke-dasharray:22;stroke-dashoffset:22;animation:drawCheck .45s ease .55s forwards}
+.x-icon{transform-origin:center;transform-box:fill-box;animation:spinIn .4s cubic-bezier(0.34,1.56,0.64,1) .68s both}
+.warn-circle{transform-origin:center;transform-box:fill-box;animation:wpulse .5s ease .81s both}
+.warn-dot{animation:dotPop .3s cubic-bezier(0.34,1.56,0.64,1) 1.1s both;transform-origin:center;transform-box:fill-box;transform:scale(0)}
+.phone-icon{transform-origin:center;transform-box:fill-box;animation:vibrate .6s ease .94s both}
+.people-icon{transform-origin:bottom center;transform-box:fill-box;animation:bounceUp .5s cubic-bezier(0.34,1.56,0.64,1) 1.07s both}
+@keyframes headerPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes rowFadeIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+@keyframes drawCheck{to{stroke-dashoffset:0}}
+@keyframes spinIn{from{transform:rotate(-90deg) scale(.3);opacity:0}to{transform:rotate(0deg) scale(1);opacity:1}}
+@keyframes wpulse{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes dotPop{from{transform:scale(0)}to{transform:scale(1)}}
+@keyframes vibrate{0%{transform:rotate(0deg) scale(.5);opacity:0}20%{transform:rotate(-15deg) scale(1.1);opacity:1}40%{transform:rotate(12deg) scale(1)}60%{transform:rotate(-8deg) scale(1)}80%{transform:rotate(5deg) scale(1)}100%{transform:rotate(0deg) scale(1);opacity:1}}
+@keyframes bounceUp{from{transform:translateY(6px) scale(.7);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+/* LEARN CARD */
+.lc{background:#E0F2FE;border:1.5px solid #1CC0E0;border-radius:12px;overflow:hidden}
+.lc-img{width:100%;aspect-ratio:16/7;object-fit:cover;display:block}
+.lc-body{padding:18px 20px 20px}
+.lc-label{display:inline-flex;align-items:center;gap:6px;background:#0475AC;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:4px 12px;border-radius:20px;margin-bottom:12px}
+.lc-label svg{width:12px;height:12px;flex-shrink:0}
+.lc-title{font-size:17px;font-weight:700;color:#0475AC;line-height:1.3;margin-bottom:10px}
+.lc-text{font-size:16px;color:#333;line-height:1.7;margin-bottom:14px}
+.lc-points{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.lc-point{display:flex;align-items:flex-start;gap:10px;font-size:16px;color:#333;line-height:1.5}
+.lc-dot{width:7px;height:7px;border-radius:50%;background:#0475AC;flex-shrink:0;margin-top:6px}
+.lc-highlight{background:#fff;border-left:3px solid #0475AC;border-radius:0 8px 8px 0;padding:10px 14px;font-size:15px;font-weight:700;color:#0475AC;line-height:1.5}
+/* FLIP CARD */
+.fp-wrap{width:100%;max-width:800px;margin:0 auto;perspective:1200px;cursor:pointer;user-select:none}
+.fp-card{width:100%;position:relative;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.4,0,.2,1)}
+.fp-card.flipped{transform:rotateY(180deg)}
+.fp-front,.fp-back{width:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:12px;overflow:hidden}
+.fp-front{position:relative}
+.fp-back{position:absolute;top:0;left:0;transform:rotateY(180deg);background:#fff;border:1px solid #E0E0E0}
+.fp-inner{display:flex;align-items:stretch;background:#fff;border:1px solid #E0E0E0;border-radius:12px;overflow:hidden;min-height:240px}
+.fp-img-col{width:42%;flex-shrink:0}
+.fp-img-col img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.fp-content-col{flex:1;padding:20px;display:flex;flex-direction:column;justify-content:space-between;background:#FEF3C7}
+.fp-name{font-size:18px;font-weight:700;color:#633806;margin-bottom:10px;line-height:1.3}
+.fp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.fp-tag{font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+.tag-room{background:#E0F2FE;color:#0475AC}.tag-wing{background:#DCFCE7;color:#16a34a}.tag-new{background:#FEE2E2;color:#dc2626}
+.fp-tap{font-size:13px;color:#854F0B;font-style:italic;display:flex;align-items:center;gap:8px}
+.fp-tap-icon{width:20px;height:20px;flex-shrink:0;animation:tapPulse 1.5s infinite}
+@keyframes tapPulse{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.2);opacity:1}}
+.fp-back-header{background:#FEF3C7;border-bottom:2px solid #D97706;padding:14px 18px;display:flex;align-items:center;gap:12px}
+.fp-back-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid #D97706;flex-shrink:0;background:#fff;padding:2px}
+.fp-back-name{font-size:15px;font-weight:700;color:#633806;margin-bottom:4px}
+.fp-back-body{padding:12px 16px}
+.fp-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555;margin-bottom:8px}
+.fp-row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid #E0E0E0}
+.fp-row:last-child{border-bottom:none;padding-bottom:0}.fp-row:first-child{padding-top:0}
+.fp-row-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.fp-row-icon svg{width:13px;height:13px}
+.fp-row-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.fp-row-text{font-size:14px;color:#333;line-height:1.5}
+.fp-alert{background:#FEE2E2;border-left:3px solid #dc2626;border-radius:0 8px 8px 0;padding:9px 13px;margin-top:10px;font-size:14px;font-weight:700;color:#dc2626;line-height:1.5}
+.fp-footer{background:#F3F4F6;border-top:1px solid #E0E0E0;padding:9px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.fp-new-pill{font-size:11px;font-weight:600;background:#FEE2E2;color:#dc2626;padding:4px 12px;border-radius:20px}
+@media(max-width:500px){.fp-img-col{width:100%;height:160px}.fp-inner{flex-direction:column}.fp-img-col img{height:160px}}
+/* ACCORDION */
+.acc-card{background:#E0F2FE;border:1.5px solid #1CC0E0;border-radius:12px;overflow:hidden}
+.acc-card-img{width:100%;aspect-ratio:16/7;object-fit:cover;display:block}
+.acc-card-body{padding:14px 16px 16px}
+.acc-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.acc-item{background:#fff;border-radius:8px;border:1px solid #1CC0E0;overflow:hidden}
+.acc-trigger{width:100%;background:none;border:none;padding:11px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left}
+.acc-num{width:24px;height:24px;border-radius:50%;background:#0475AC;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.acc-title{flex:1;font-size:15px;font-weight:700;color:#0475AC;line-height:1.3}
+.acc-arrow{width:16px;height:16px;flex-shrink:0;transition:transform .25s;color:#0475AC}
+.acc-item.open .acc-arrow{transform:rotate(180deg)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.acc-item.open .acc-body{max-height:300px}
+.acc-desc{font-size:15px;color:#333;line-height:1.6;border-top:1px solid #E0F2FE;padding:10px 12px 12px}
+.acc-highlight{background:#fff;border-left:3px solid #0475AC;border-radius:0 8px 8px 0;padding:10px 14px;font-size:15px;font-weight:700;color:#0475AC;line-height:1.5}
+/* POSITIONING */
+.pos-card{border:1.5px solid #E0E0E0;border-radius:12px;overflow:hidden;background:#fff;transition:border-color .25s}
+.pos-card.open{border-color:#1CC0E0}
+.pos-trig{display:flex;align-items:stretch;cursor:pointer}
+.pos-thumb{width:64px;flex-shrink:0;background:#F3F4F6;border-right:1px solid #E0E0E0;display:flex;align-items:center;justify-content:center;min-height:64px;overflow:hidden;transition:background .25s}
+.pos-card.open .pos-thumb{background:#E0F2FE;border-color:#1CC0E0}
+.pos-thumb img{width:64px;height:100%;object-fit:cover;display:block}
+.pos-cont{flex:1;padding:12px 14px;display:flex;align-items:center;gap:10px}
+.pos-title{flex:1;font-size:15px;font-weight:700;color:#0475AC;line-height:1.3}
+.pos-arr{width:16px;height:16px;flex-shrink:0;color:#B4B2A9;transition:transform .25s,color .25s}
+.pos-card.open .pos-arr{transform:rotate(180deg);color:#0475AC}
+.pos-bd{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.pos-card.open .pos-bd{max-height:200px}
+.pos-inner{border-top:1px solid #E0F2FE;padding:12px 14px;font-size:15px;color:#333;line-height:1.6}
+.pos-highlight{background:#FEFCE8;border-left:4px solid #EAB308;border-radius:0 10px 10px 0;padding:12px 16px;margin-top:4px}
+.pos-hl-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#A16207;margin-bottom:4px}
+.pos-hl-txt{font-size:15px;font-weight:700;color:#713F12;line-height:1.5}
+/* HOTSPOT */
+.hs-scene{position:relative;width:100%;border-radius:12px;overflow:hidden}
+.hs-img{width:100%;aspect-ratio:3/2;object-fit:cover;display:block;border-radius:12px}
+.hs-marker{position:absolute;width:36px;height:36px;transform:translate(-50%,-50%);cursor:pointer;z-index:2}
+.hs-pulse,.hs-pulse2{position:absolute;inset:0;border-radius:50%}
+.hs-pulse{background:rgba(255,255,255,.5);animation:hsPulse 1.8s ease-in-out infinite}
+.hs-pulse2{background:rgba(255,255,255,.3);animation:hsPulse 1.8s ease-in-out infinite .6s}
+@keyframes hsPulse{0%{transform:scale(1);opacity:.8}50%{transform:scale(1.7);opacity:0}100%{transform:scale(1);opacity:0}}
+.hs-btn{position:absolute;inset:0;border-radius:50%;background:#fff;border:2px solid #0475AC;display:flex;align-items:center;justify-content:center;z-index:1;transition:background .3s,border-color .3s}
+.hs-marker.clicked .hs-pulse,.hs-marker.clicked .hs-pulse2{animation:none;opacity:0}
+.hs-marker.clicked .hs-btn{background:#E0E0E0;border-color:#B4B2A9}
+.hs-btn svg{width:16px;height:16px}
+.hs-panel{display:none;margin-top:10px;background:#fff;border:1.5px solid #1CC0E0;border-radius:10px;padding:14px 16px;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s}
+.hs-panel.show{display:block}
+.hs-panel.visible{opacity:1;transform:translateY(0)}
+.hs-info-title{font-size:16px;font-weight:700;color:#0475AC;margin-bottom:6px}
+.hs-info-text{font-size:15px;color:#333;line-height:1.6}
+.hs-prog{display:flex;align-items:center;gap:8px;margin-top:10px}
+.hs-dots{display:flex;gap:6px}
+.hs-dot{width:8px;height:8px;border-radius:50%;background:#E0E0E0;transition:background .3s}
+.hs-dot.done{background:#0475AC}
+.hs-prog-text{font-size:13px;color:#B4B2A9;font-style:italic}
+/* TRUE/FALSE */
+.tf-pb{height:4px;background:#E0E0E0;border-radius:4px;margin-bottom:16px;overflow:hidden}
+.tf-pf{height:100%;background:#0475AC;border-radius:4px;transition:width .4s ease}
+.tf-counter{text-align:center;font-size:12px;font-weight:700;color:#B4B2A9;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.tf-card{background:#fff;border:1.5px solid #E0E0E0;border-radius:14px;padding:22px 18px;margin-bottom:14px;transition:background .3s,border-color .3s;min-height:100px;display:flex;flex-direction:column;justify-content:center}
+.tf-card.ac{background:#DCFCE7;border-color:#16a34a}
+.tf-card.ai{background:#FEE2E2;border-color:#dc2626}
+.tf-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#B4B2A9;margin-bottom:8px}
+.tf-txt{font-size:16px;color:#333;line-height:1.6;font-weight:500}
+.tf-fb{display:none;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08);font-size:14px;line-height:1.6}
+.tf-fb.show{display:block}
+.tf-fb.cfb{color:#15803d}
+.tf-fb.ifb{color:#b91c1c}
+.tf-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.tf-btn{padding:14px;border-radius:12px;border:1.5px solid #E0E0E0;background:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,border-color .2s}
+.tf-btn:disabled{opacity:.35;cursor:default}
+.tf-t{border-color:#86EFAC;color:#16a34a}
+.tf-t:not(:disabled):hover{background:#DCFCE7;border-color:#16a34a}
+.tf-f{border-color:#FCA5A5;color:#dc2626}
+.tf-f:not(:disabled):hover{background:#FEE2E2;border-color:#dc2626}
+.tf-nx{display:none;width:100%;padding:13px;background:#0475AC;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:6px}
+.tf-nx.show{display:block}
+.tf-final{display:none}
+.tf-final.show{display:block}
+.tf-score-box{border-radius:12px;overflow:hidden;border:1.5px solid #E0E0E0}
+.tf-score-bar{padding:12px 16px;display:flex;align-items:center;gap:10px}
+.tf-score-bar.allc{background:#16a34a}
+.tf-score-bar.somew{background:#0475AC}
+.tf-score-bar-text{font-size:14px;font-weight:700;color:#fff}
+.tf-score-body{padding:16px;background:#fff}
+.tf-score-text{font-size:15px;color:#333;line-height:1.75;margin:0 0 14px}
+.tf-linda-row{display:flex;align-items:flex-start;gap:12px;background:#F0F8FF;border-radius:10px;padding:12px 14px;border:1.5px solid #BAE6FD;flex-wrap:wrap}
+.tf-linda-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:2px solid #0475AC}
+.tf-linda-name{font-size:12px;font-weight:700;color:#0475AC;margin:0 0 4px}
+.tf-linda-text{font-size:14px;color:#333;line-height:1.7;margin:0;font-style:italic}
+/* MCQ */
+.mcq-scenario{font-size:16px;color:#333;line-height:1.7;margin-bottom:14px}
+.mcq-question{font-size:16px;font-weight:700;color:#0475AC;margin-bottom:12px}
+.mcq-opts{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.mcq-opt{display:grid;grid-template-columns:32px 1fr;align-items:start;gap:12px;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;transition:border-color .2s,background .2s;background:#fff}
+.mcq-opt:hover{border-color:#0475AC;background:#f0f8ff}
+.mcq-opt.sel{border-color:#0475AC;background:#E0F2FE}
+.mcq-opt.cor{border-color:#16a34a;background:#f0fdf4;pointer-events:none}
+.mcq-opt.inc{border-color:#dc2626;background:#fef2f2;pointer-events:none}
+.mcq-opt.dis{pointer-events:none;opacity:.6}
+.mcq-letter{width:28px;height:28px;border-radius:50%;background:#e0e0e0;color:#555;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s,color .2s}
+.mcq-opt.sel .mcq-letter{background:#0475AC;color:#fff}
+.mcq-opt.cor .mcq-letter{background:#16a34a;color:#fff}
+.mcq-opt.inc .mcq-letter{background:#dc2626;color:#fff}
+.mcq-text{font-size:15px;color:#333;line-height:1.6;margin:0;padding-top:2px}
+.mcq-submit{display:block;width:100%;padding:13px;background:#0475AC;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:background .2s}
+.mcq-submit:hover{background:#035a87}
+.mcq-submit:disabled{background:#ccc;cursor:default}
+.mcq-fb{display:none;margin-top:14px;border-radius:12px;overflow:hidden;border:1.5px solid #e0e0e0}
+.mcq-fb.show{display:block}
+.mcq-fh{padding:12px 16px;display:flex;align-items:center;gap:10px}
+.mcq-fh.ch{background:#16a34a}
+.mcq-fh.ih{background:#dc2626}
+.mcq-fh-text{font-size:14px;font-weight:700;color:#fff}
+.mcq-fb-body{padding:14px;background:#fff}
+.mcq-fb-text{font-size:15px;color:#333;line-height:1.75;margin:0 0 12px}
+.mcq-linda{display:flex;align-items:flex-start;gap:12px;background:#F0F8FF;border-radius:10px;padding:12px 14px;border:1.5px solid #BAE6FD;flex-wrap:wrap}
+.mcq-linda-av{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:2px solid #0475AC}
+.mcq-linda-name{font-size:12px;font-weight:700;color:#0475AC;margin:0 0 4px}
+.mcq-linda-text{font-size:14px;color:#333;line-height:1.7;margin:0;font-style:italic}
+/* CHARACTER QUOTES */
+.cq-wrap{max-width:800px;margin:0 auto;padding:16px 16px 0;background:#FEFCE8}
+.cq-card{display:flex;align-items:center;opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
+.cq-card.visible{opacity:1;transform:translateY(0)}
+.cq-left{position:relative;flex-shrink:0;width:clamp(120px,33vw,240px)}
+.cq-qmark{position:absolute;top:-5px;left:clamp(60px,16vw,100px);width:clamp(50px,13vw,100px);opacity:.6;z-index:0}
+.cq-avatar{width:100%;height:auto;display:block;position:relative;z-index:1}
+.cq-right{flex:1;padding-left:14px;border-left:4px solid #0475AC}
+.cq-text{font-size:clamp(15px,4vw,18px);color:#0475AC;font-weight:700;line-height:1.7}
+.lq-card{display:flex;align-items:center;padding:16px 0 0;opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
+.lq-card.visible{opacity:1;transform:translateY(0)}
+.lq-left{flex:1;padding-right:14px;border-right:4px solid #0475AC}
+.lq-text{font-size:clamp(14px,4vw,17px);color:#0475AC;font-weight:700;line-height:1.7}
+.lq-right{position:relative;flex-shrink:0;width:clamp(100px,24vw,160px)}
+.lq-qmark{position:absolute;top:-5px;left:-18px;width:clamp(44px,10vw,80px);opacity:.5;z-index:0;transform:scaleX(-1)}
+.lq-avatar{width:100%;height:auto;display:block;position:relative;z-index:1}
+/* DECISION */
+.dc-opts{display:flex;gap:12px;flex-wrap:wrap}
+.dc-btn{flex:1;min-width:130px;padding:14px;border-radius:10px;border:1.5px solid #e0e0e0;background:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:border-color .2s,background .2s;text-align:center}
+.dc-yes{color:#16a34a;border-color:#16a34a}
+.dc-yes:hover{background:#f0fdf4}
+.dc-no{color:#dc2626;border-color:#dc2626}
+.dc-no:hover{background:#fef2f2}
+.dc-btn.sy{background:#f0fdf4;border-color:#16a34a}
+.dc-btn.sn{background:#fef2f2;border-color:#dc2626}
+.dc-btn:disabled{cursor:default}
+.dc-panel{display:none;margin-top:18px}
+.dc-panel.show{display:block}
+.suc-panel{border-radius:12px;overflow:hidden;border:1.5px solid #bbf7d0}
+.suc-hd{background:#16a34a;padding:12px 16px;display:flex;align-items:center;gap:10px}
+.suc-hdt{font-size:14px;font-weight:700;color:#fff}
+.suc-bd{background:#fff;padding:14px}
+.suc-txt{font-size:15px;color:#333;line-height:1.75;margin:0 0 12px}
+.suc-note{border-left:4px solid #16a34a;padding:11px 13px;background:#f0fdf4;border-radius:0 8px 8px 0}
+.suc-note-text{font-size:15px;color:#15803d;line-height:1.7;margin:0;font-weight:700}
+.cons-box{background:#1a1a2e;border-radius:12px;padding:20px;margin-bottom:14px}
+.cons-time{font-size:12px;font-weight:700;color:#1CC0E0;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+.cons-txt{font-size:15px;color:#e8e8e8;line-height:1.8;margin:0 0 10px}
+.cons-txt.hl{color:#fff;font-weight:700}
+.cons-div{border:none;border-top:1px solid #333;margin:12px 0}
+.piv-q{font-size:15px;font-weight:700;color:#0475AC;margin-bottom:12px}
+.rev-btn{display:block;width:100%;padding:13px;background:#0475AC;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px;transition:background .2s}
+.rev-btn:hover{background:#035a87}
+.fin-rev{display:none}
+.fin-rev.show{display:block}
+.fin-txt{font-size:15px;color:#333;line-height:1.75;margin:0 0 12px}
+.fin-hl{border-left:4px solid #1CC0E0;padding:11px 13px;background:#E0F2FE;border-radius:0 8px 8px 0;margin-bottom:14px}
+.fin-hl-text{font-size:15px;color:#0475AC;line-height:1.7;margin:0;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <nav id="nav">
+    <button id="hamburger" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <div id="course-nav-title">Safe Handling and MSI Prevention</div>
+    <div style="width:38px"></div>
+  </nav>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+</div>
+
+<div id="menu-overlay">
+  <div id="menu-panel">
+    <div id="menu-header">
+      <div id="menu-header-text"><div class="menu-org">Sunrise Ridge</div><div class="menu-course-name">Safe Handling and MSI Prevention</div></div>
+      <button id="menu-close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="menu-lessons"></div>
+  </div>
+</div>
+
+<div id="popup-overlay">
+  <div class="popup-card">
+    <img class="popup-img" id="popup-img" src="" alt="" style="display:none">
+    <div class="popup-body">
+      <div class="popup-title" id="popup-title"></div>
+      <div class="popup-text" id="popup-text"></div>
+      <button class="popup-close" id="popup-close-btn">Close ×</button>
+    </div>
+  </div>
+</div>
+
+<div id="content-area">
+
+<!-- SLIDE 0: COVER -->
+<div class="slide" id="slide-0">
+  <div style="display:flex;flex-direction:column;min-height:100%;background:linear-gradient(160deg,#f0f9ff 0%,#e0f2fe 55%,#bae6fd 100%)">
+    <div class="cover-hero">
+      <img src="https://picsum.photos/seed/sunrise/800/450" alt="Sunrise Ridge">
+      <div class="cover-overlay"></div>
+      <div class="cover-hero-text">
+        <div class="cover-badge">Sunrise Ridge</div>
+        <h1 class="cover-title">Safe Handling and MSI Prevention</h1>
+      </div>
+    </div>
+    <div class="cover-body">
+      <p class="cover-desc">A story-based course for residential care workers. You are fourteen months into the job. Today, Priya is back.</p>
+      <div class="cover-meta">
+        <div class="cover-meta-item"><span class="cover-meta-icon">⏱</span><div><div class="cover-meta-label">Est. time</div><div class="cover-meta-value">~25 min</div></div></div>
+        <div class="cover-meta-item"><span class="cover-meta-icon">📋</span><div><div class="cover-meta-label">Lessons</div><div class="cover-meta-value">5 lessons</div></div></div>
+        <div class="cover-meta-item"><span class="cover-meta-icon">📱</span><div><div class="cover-meta-label">Format</div><div class="cover-meta-value">Mobile-first</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 1 -->
+<div class="slide" id="slide-1">
+  <div class="lesson-header"><div class="lesson-num">Lesson 1 of 5</div><div class="lesson-title-h">Before you begin</div></div>
+  <div class="block block-text fu"><p>You are fourteen months into the job at Sunrise Ridge. You know the wings, the residents, and the rhythms of a shift. Today is different.</p></div>
+  <div class="block block-text fu" style="text-align:center;padding-top:24px;padding-bottom:8px"><p style="font-family:var(--display);font-size:28px;color:var(--primary)">Priya is back.</p></div>
+  <div class="block block-text fu">
+    <p>She has been off for six weeks with a lower back strain from a repositioning task. Experienced, careful, does not cut corners. She got hurt anyway.</p>
+    <p>Linda has asked you to be her buddy for the morning. Not to supervise — just to be a second set of hands and a familiar face.</p>
+    <p>What happened to Priya is not unusual. <strong>Musculoskeletal injuries are the leading cause of lost time in BC residential care.</strong></p>
+  </div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- SLIDE 2 -->
+<div class="slide" id="slide-2">
+  <div class="lesson-header"><div class="lesson-num">Lesson 2 of 5</div><div class="lesson-title-h">She's back!</div></div>
+  <div class="block block-text fu"><p>You walk into the staff room, and Priya looks up from her mug.</p></div>
+  <div class="block fu">
+    <div class="doc-wrap"><div class="doc-paper">
+      <div class="doc-header"><div class="doc-icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><div><div class="doc-title">Return to Work Plan — Priya Sharma</div><div class="doc-subtitle">Modified duties, Week 1 of 2 &nbsp;|&nbsp; Sunrise Ridge Residential Care</div></div></div>
+      <div class="doc-body">
+        <div class="doc-row"><div class="row-icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline class="check-path" points="20 6 9 17 4 12"/></svg></div><div class="row-text"><div class="row-label label-green">Cleared for</div><div class="row-desc">All resident care tasks with a second person present.</div></div></div>
+        <div class="doc-row"><div class="row-icon icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><g class="x-icon"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></g></svg></div><div class="row-text"><div class="row-label label-red">Not cleared for</div><div class="row-desc">Solo repositioning, solo transfers, or any single-person manual lift.</div></div></div>
+        <div class="doc-row"><div class="row-icon icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle class="warn-circle" cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle class="warn-dot" cx="12" cy="16" r=".5" fill="#D97706"/></svg></div><div class="row-text"><div class="row-label label-amber">Before each task</div><div class="row-desc">Complete a pre-task risk check before every assisted task.</div></div></div>
+        <div class="doc-row"><div class="row-icon icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><g class="phone-icon"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 1.25h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/></g></svg></div><div class="row-text"><div class="row-label label-amber">Report any pain</div><div class="row-desc">Stop and tell the charge nurse before continuing if pain increases.</div></div></div>
+        <div class="doc-row"><div class="row-icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><g class="people-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g></svg></div><div class="row-text"><div class="row-label label-blue">Assigned buddy</div><div class="row-desc">You are working alongside Priya for the full morning.</div></div></div>
+      </div>
+      <div class="doc-footer"><span class="footer-text">Issued by Linda Osei, Charge Nurse</span><span class="buddy-pill">Week 1 of 2</span></div>
+    </div></div>
+  </div>
+  <div class="block block-text fu"><p><em>"Hey. You are my buddy today. Stiff in the mornings but better by ten. Cleared for regular tasks with a second person. Nothing solo until week three."</em></p><p>She says it matter-of-factly. Not looking for sympathy.</p></div>
+  <div class="block fu">
+    <div class="lc">
+      <img class="lc-img" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Sunridge%20Care-msi.png" onerror="this.src='https://picsum.photos/seed/msi/800/350'" alt="Care worker">
+      <div class="lc-body">
+        <div class="lc-label"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Learning content</div>
+        <div class="lc-title">What is an MSI and why does it matter?</div>
+        <p class="lc-text">A musculoskeletal injury (MSI) is damage to muscles, tendons, ligaments, joints or nerves caused by work. In residential care, the most common MSIs are low back strains, shoulder injuries, and neck strain from repeated or awkward movement.</p>
+        <ul class="lc-points"><li class="lc-point"><span class="lc-dot"></span>MSIs are the leading cause of lost-time injuries among BC care workers.</li><li class="lc-point"><span class="lc-dot"></span>Manual resident handling is the highest-risk activity in residential care.</li><li class="lc-point"><span class="lc-dot"></span>Risk is not only about weight — posture, angles, repetition and environment all matter.</li></ul>
+        <div class="lc-highlight">Most MSIs are preventable with the right assessment, equipment, and technique.</div>
+      </div>
+    </div>
+  </div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- SLIDE 3 -->
+<div class="slide" id="slide-3">
+  <div class="lesson-header"><div class="lesson-num">Lesson 3 of 5</div><div class="lesson-title-h">Meeting Mrs. Okonwo</div></div>
+  <div class="block block-text fu"><p>She arrived yesterday. Here is what you need to know.</p></div>
+  <!-- FLIP CARD -->
+  <div class="block fu">
+    <div class="fp-wrap" id="fp-wrap">
+      <div class="fp-card" id="flipCard">
+        <div class="fp-front"><div class="fp-inner">
+          <div class="fp-img-col"><img src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Grace_Okinwo.png" onerror="this.src='https://picsum.photos/seed/grace/300/400'" alt="Mrs Grace Okonkwo"></div>
+          <div class="fp-content-col">
+            <div><div class="fp-name">Mrs. Grace Okonkwo</div><div class="fp-tags"><span class="fp-tag tag-room">Room 32</span><span class="fp-tag tag-wing">Oak Wing</span><span class="fp-tag tag-new">New admission</span></div></div>
+            <div class="fp-tap"><svg class="fp-tap-icon" viewBox="0 0 24 24" fill="none" stroke="#854F0B" stroke-width="2" stroke-linecap="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8 2 2 0 1 1 4 0"/></svg>Tap to see handling plan</div>
+          </div>
+        </div></div>
+        <div class="fp-back" id="flipBack">
+          <div class="fp-back-header"><img class="fp-back-avatar" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Grace_Okinwo_noBG.png" onerror="this.src='https://picsum.photos/seed/gracebg/100/100'" alt="Mrs Okonkwo"><div><div class="fp-back-name">Mrs. Grace Okonkwo</div><div class="fp-tags"><span class="fp-tag tag-room">Room 32</span><span class="fp-tag tag-wing">Oak Wing</span><span class="fp-tag tag-new">New admission</span></div></div></div>
+          <div class="fp-back-body">
+            <div class="fp-section-label">Handling plan</div>
+            <div class="fp-row"><div class="fp-row-icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div><div class="fp-row-label label-blue">Resident</div><div class="fp-row-text">82 years old. Hip replacement, admitted yesterday. Non-weight bearing on left side.</div></div></div>
+            <div class="fp-row"><div class="fp-row-icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><div class="fp-row-label label-green">Equipment</div><div class="fp-row-text">Ceiling track lift with full sling. Sling and track are in Room 32.</div></div></div>
+            <div class="fp-row"><div class="fp-row-icon icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div><div class="fp-row-label label-red">Staffing</div><div class="fp-row-text">Two-person assist required for all transfers and repositioning.</div></div></div>
+            <div class="fp-row"><div class="fp-row-icon icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div><div class="fp-row-label label-amber">Communication</div><div class="fp-row-text">Speaks English. May need information repeated.</div></div></div>
+            <div class="fp-alert">Confirm sling fit before every transfer. Do not proceed without checking.</div>
+          </div>
+          <div class="fp-footer"><span style="font-size:12px;color:#555;font-style:italic">Admitted yesterday from acute care</span><span class="fp-new-pill">Review before entry</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="block block-text fu"><p>Priya mentions she has not used a ceiling track lift since her training two years ago. She knows the steps — she just wants to take it slow.</p></div>
+  <!-- PRE-TASK ACCORDION -->
+  <div class="block fu">
+    <div class="acc-card">
+      <img class="acc-card-img" src="https://picsum.photos/seed/pretask/800/350" alt="Pre-task check">
+      <div class="acc-card-body">
+        <div class="lc-title" style="margin-bottom:6px">The pre-task risk check</div>
+        <p class="lc-text">Before any resident handling task, SafeCare BC recommends a pre-task risk check. It takes less than a minute. Tap each area to see what to look for.</p>
+        <div class="acc-list">
+          <div class="acc-item"><button class="acc-trigger"><div class="acc-num">1</div><span class="acc-title">The resident</span><svg class="acc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="acc-body"><div class="acc-desc">What is their mobility level today? Have there been any changes since the last shift? Are they cooperative or anxious?</div></div></div>
+          <div class="acc-item"><button class="acc-trigger"><div class="acc-num">2</div><span class="acc-title">The environment</span><svg class="acc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="acc-body"><div class="acc-desc">Is the room clear enough to work in? Is the equipment in place and functioning? Is there a clear path for the lift or sling?</div></div></div>
+          <div class="acc-item"><button class="acc-trigger"><div class="acc-num">3</div><span class="acc-title">The task</span><svg class="acc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="acc-body"><div class="acc-desc">Is this the right time for this task? Do we have enough people? Is the equipment correct for this resident?</div></div></div>
+          <div class="acc-item"><button class="acc-trigger"><div class="acc-num">4</div><span class="acc-title">Yourself</span><svg class="acc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="acc-body"><div class="acc-desc">Am I physically and mentally ready for this task? Is there anything about my condition today that might affect how I perform it safely?</div></div></div>
+        </div>
+        <div class="acc-highlight">If any of those four checks raises a concern, you do not proceed without addressing it first.</div>
+      </div>
+    </div>
+  </div>
+  <div class="block-divider fu"></div>
+  <div class="block block-text fu"><p>You knock and step in slowly. <em>The room tells you everything if you know what to look for.</em></p></div>
+  <!-- HOTSPOT -->
+  <div class="block fu">
+    <div class="hs-scene">
+      <img class="hs-img" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Okowo_room_1.png" onerror="this.src='https://picsum.photos/seed/room1/800/533'" alt="Mrs Okonwo room">
+      <div class="hs-marker" id="hsm-0" style="left:82%;top:50%"><div class="hs-pulse"></div><div class="hs-pulse2"></div><div class="hs-btn"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+      <div class="hs-marker" id="hsm-1" style="left:12%;top:65%"><div class="hs-pulse"></div><div class="hs-pulse2"></div><div class="hs-btn"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+      <div class="hs-marker" id="hsm-2" style="left:47%;top:52%"><div class="hs-pulse"></div><div class="hs-pulse2"></div><div class="hs-btn"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+      <div class="hs-marker" id="hsm-3" style="left:55%;top:12%"><div class="hs-pulse"></div><div class="hs-pulse2"></div><div class="hs-btn"><svg viewBox="0 0 24 24" fill="none" stroke="#0475AC" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div></div>
+    </div>
+    <div class="hs-panel" id="hs-panel"><div class="hs-info-title" id="hs-title"></div><div class="hs-info-text" id="hs-text"></div></div>
+    <div class="hs-prog"><div class="hs-dots"><div class="hs-dot" id="hsd-0"></div><div class="hs-dot" id="hsd-1"></div><div class="hs-dot" id="hsd-2"></div><div class="hs-dot" id="hsd-3"></div></div><div class="hs-prog-text" id="hs-prog-text">Tap each marker to scan the room</div></div>
+  </div>
+  <div class="block-divider fu"></div>
+  <!-- TRUE/FALSE -->
+  <div class="block fu">
+    <div id="tf-game">
+      <div class="tf-pb"><div class="tf-pf" id="tf-pf" style="width:25%"></div></div>
+      <div class="tf-counter" id="tf-counter">Statement 1 of 4</div>
+      <div class="tf-card" id="tf-card"><div class="tf-lbl">True or false?</div><div class="tf-txt" id="tf-txt"></div><div class="tf-fb" id="tf-fb"></div></div>
+      <div class="tf-btns"><button class="tf-btn tf-t" id="tf-true">👍 True</button><button class="tf-btn tf-f" id="tf-false">👎 False</button></div>
+      <button class="tf-nx" id="tf-nx">Next →</button>
+    </div>
+    <div class="tf-final" id="tf-final">
+      <div class="tf-score-box"><div class="tf-score-bar" id="tf-score-bar"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="white" stroke-width="1.5"/><path d="M4 8l3 3 5-5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tf-score-bar-text" id="tf-score-bar-text"></span></div><div class="tf-score-body"><p class="tf-score-text" id="tf-score-text"></p><div class="tf-linda-row"><img class="tf-linda-avatar" src="https://articulateusercontent.com/rise/courses/BvZCGsCoIexe6-u9Bv5zEmgpyXgjq-V5/SUYP9AupgjZPONFr.jpg" onerror="this.src='https://picsum.photos/seed/linda/100/100'" alt="Linda"><div><p class="tf-linda-name">Linda, Charge Nurse</p><p class="tf-linda-text">Every one of those statements comes from a real situation where a worker made a different call. The lift is not dangerous on its own. The decisions around it are what matter.</p></div></div></div></div>
+    </div>
+  </div>
+  <div class="block block-text fu"><p>You and Priya confirm the sling fit together, talking through each step with Mrs. Okonkwo before moving. Eleven minutes later she is in the chair by the window.</p></div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- SLIDE 4 -->
+<div class="slide" id="slide-4">
+  <div class="lesson-header"><div class="lesson-num">Lesson 4 of 5</div><div class="lesson-title-h">At Cedar Wing: The Habits Get Tested</div></div>
+  <!-- POSITIONING -->
+  <div class="block fu">
+    <div style="background:#E0F2FE;border:1.5px solid #1CC0E0;border-radius:12px;overflow:hidden;margin-bottom:12px">
+      <img src="https://picsum.photos/seed/bodypos/800/350" style="width:100%;aspect-ratio:16/7;object-fit:cover;display:block" alt="Body mechanics">
+      <div style="padding:14px 16px 16px"><div class="lc-title" style="margin-bottom:4px">Before repositioning, always</div><p style="font-size:15px;color:#333;line-height:1.6">Four steps that take less than a minute and protect your back every time. Tap each one to read why it matters.</p></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      <div class="pos-card" id="pc-0"><div class="pos-trig"><div class="pos-thumb"><img src="https://picsum.photos/seed/bed1/100/100" onerror="this.style.opacity='0'" alt=""></div><div class="pos-cont"><div class="pos-title">Adjust the bed to hip height</div><svg class="pos-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="pos-bd"><div class="pos-inner">Adjust the bed so it sits at hip level when you are standing. This keeps your spine in a neutral position throughout the task. Working below hip height forces a bend that multiplies the load on your lower back with every movement.</div></div></div>
+      <div class="pos-card" id="pc-1"><div class="pos-trig"><div class="pos-thumb"><img src="https://picsum.photos/seed/bed2/100/100" onerror="this.style.opacity='0'" alt=""></div><div class="pos-cont"><div class="pos-title">Lower the rail on your side</div><svg class="pos-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="pos-bd"><div class="pos-inner">Lower the bed rail on your working side before you touch the resident or the slide sheet. Reaching over a raised rail while leaning forward is the most common single cause of lower back MSI in repositioning tasks. Priya did not lower the rail. That was the moment.</div></div></div>
+      <div class="pos-card" id="pc-2"><div class="pos-trig"><div class="pos-thumb"><img src="https://picsum.photos/seed/bed3/100/100" onerror="this.style.opacity='0'" alt=""></div><div class="pos-cont"><div class="pos-title">Keep the load close to your body</div><svg class="pos-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="pos-bd"><div class="pos-inner">The further the load is from your centre of gravity, the more force your spine absorbs. Step close to the bed. Do not reach across. If you cannot get close enough, reposition yourself before you reposition the resident.</div></div></div>
+      <div class="pos-card" id="pc-3"><div class="pos-trig"><div class="pos-thumb"><img src="https://picsum.photos/seed/bed4/100/100" onerror="this.style.opacity='0'" alt=""></div><div class="pos-cont"><div class="pos-title">Keep your spine neutral throughout</div><svg class="pos-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="pos-bd"><div class="pos-inner">Keep your back in its natural curve throughout the task. If you need to go lower, bend from the knees, not the waist. A neutral spine distributes the load across the whole body. A bent or twisted spine concentrates it at the weakest point.</div></div></div>
+    </div>
+    <div class="pos-highlight" id="pos-highlight" style="display:none"><div class="pos-hl-lbl">Key takeaway</div><div class="pos-hl-txt">Keep your spine neutral. Bend from the knees if you need to lower your height.</div></div>
+  </div>
+  <div class="block-divider fu"></div>
+  <!-- MCQ -->
+  <div class="block fu">
+    <p class="mcq-scenario">You are about to reposition Mr. Kowalski using the slide sheet. He is in bed, awake and partially cooperative. The bed is at its lowest setting and the rail is up on both sides.</p>
+    <p class="mcq-question">What do you do first?</p>
+    <div class="mcq-opts">
+      <div class="mcq-opt" id="mq-a"><div class="mcq-letter">A</div><p class="mcq-text">Proceed carefully. The bed height is not ideal but you have done this before and it is faster to just get it done.</p></div>
+      <div class="mcq-opt" id="mq-b"><div class="mcq-letter">B</div><p class="mcq-text">Adjust the bed to working height and lower the rail on your working side before touching the slide sheet or the resident.</p></div>
+      <div class="mcq-opt" id="mq-c"><div class="mcq-letter">C</div><p class="mcq-text">Ask Mr. Kowalski to help shift himself up the bed first, so the repositioning effort is smaller.</p></div>
+      <div class="mcq-opt" id="mq-d"><div class="mcq-letter">D</div><p class="mcq-text">Position the slide sheet first, then adjust the bed, so you do not disturb the sheet once it is in place.</p></div>
+    </div>
+    <button class="mcq-submit" id="mq-submit" disabled>Submit answer</button>
+    <div class="mcq-fb" id="mq-cor"><div class="mcq-fh ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="white" stroke-width="1.5"/><path d="M4 8l3 3 5-5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mcq-fh-text">Exactly right.</span></div><div class="mcq-fb-body"><p class="mcq-fb-text">The bed height and rail position are not small details you sort out mid-task. They are what keep your back safe. Adjust first, every single time.</p><div class="mcq-linda"><img class="mcq-linda-av" src="https://articulateusercontent.com/rise/courses/BvZCGsCoIexe6-u9Bv5zEmgpyXgjq-V5/SUYP9AupgjZPONFr.jpg" onerror="this.src='https://picsum.photos/seed/linda/100/100'" alt="Linda"><div><p class="mcq-linda-name">Linda, Charge Nurse</p><p class="mcq-linda-text">Priya learned this the hard way. You adjust first, every single time, before anything else in the room happens.</p></div></div></div></div>
+    <div class="mcq-fb" id="mq-inc"><div class="mcq-fh ih"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="white" stroke-width="1.5"/><path d="M5 5l6 6M11 5l-6 6" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg><span class="mcq-fh-text" id="mq-iht">Not quite.</span></div><div class="mcq-fb-body"><p class="mcq-fb-text">The first step is always to adjust the bed to working height and lower the rail on your working side.</p><div class="mcq-linda"><img class="mcq-linda-av" src="https://articulateusercontent.com/rise/courses/BvZCGsCoIexe6-u9Bv5zEmgpyXgjq-V5/SUYP9AupgjZPONFr.jpg" onerror="this.src='https://picsum.photos/seed/linda/100/100'" alt="Linda"><div><p class="mcq-linda-name">Linda, Charge Nurse</p><p class="mcq-linda-text" id="mq-lad">Lorem ipsum advice text here.</p></div></div></div></div>
+  </div>
+  <div class="block-divider fu"></div>
+  <div class="block block-text fu"><p>You adjust the bed, lower the rail, and Mr. Kowalski is repositioned safely in two minutes.</p><p>You are in the lounge with coffee when Jonah comes over and sits down.</p></div>
+  <div class="block block-image fu"><img src="https://picsum.photos/seed/lounge/800/400" alt="Staff lounge"></div>
+  <div class="block block-text fu"><p>Jonah had been helping with a transfer. The other aide said they could skip the stand aid. <em>"The handling plan said two-person assist. I knew that. I just went along with it."</em></p></div>
+  <!-- PRIYA QUOTE (left-facing) -->
+  <div class="fu" style="padding:0">
+    <div class="cq-wrap"><div class="cq-card" id="cq-card">
+      <div class="cq-left"><img class="cq-qmark" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/quote.png" onerror="this.style.display='none'" alt=""><img class="cq-avatar" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Priya_Quote.png" onerror="this.src='https://picsum.photos/seed/priyaq/200/300'" alt="Priya"></div>
+      <div class="cq-right"><div class="cq-text">Weight and cooperation are not the standard. <span style="background:#FDE68A;padding:2px 4px;border-radius:3px">The handling plan</span> is the standard.</div></div>
+    </div></div>
+  </div>
+  <div class="block-divider fu"></div>
+  <div class="block block-text fu"><p>Mrs. Okonkwo has reported pain during the lift. You are mid-transfer. She is suspended above the chair. Priya has stopped the remote.</p><p><strong>Do you lower her back to the chair immediately?</strong></p></div>
+  <!-- DECISION -->
+  <div class="block fu">
+    <div class="dc-opts">
+      <button class="dc-btn dc-yes" id="dc-yes">Yes, lower the resident</button>
+      <button class="dc-btn dc-no" id="dc-no">No, continue the transfer</button>
+    </div>
+    <div class="dc-panel" id="panel-yes">
+      <div class="suc-panel"><div class="suc-hd"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="white" stroke-width="1.5"/><path d="M4 8l3 3 5-5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="suc-hdt">That is exactly what you do.</span></div><div class="suc-bd"><p class="suc-txt">Priya lowers Mrs. Okonkwo gently back to the chair. You keep your hand on the sling frame. You kneel to her eye level and ask where the pain is. She says the left side pulled when she started to move.</p><p class="suc-txt">You press the call button and wait for Linda. The transfer does not continue until the clinical team has assessed.</p><div class="suc-note"><p class="suc-note-text">Pain during a lift is a stop signal. You do not assess, you do not negotiate, you do not continue. You stop, lower, and get help.</p></div></div></div>
+      <div class="lq-card" id="lq-yes">
+        <div class="lq-left"><div class="lq-text">This is why we check the sling fit every time. Not just the first time.</div></div>
+        <div class="lq-right"><img class="lq-qmark" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/quote.png" onerror="this.style.display='none'" alt=""><img class="lq-avatar" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Linda_Quote.png" onerror="this.src='https://picsum.photos/seed/lindaq/200/300'" alt="Linda"></div>
+      </div>
+    </div>
+    <div class="dc-panel" id="panel-no">
+      <div class="cons-box"><p class="cons-time">Mid-transfer. Mrs. Okonkwo suspended in the sling.</p><p class="cons-txt">You decide to continue. She will be more comfortable in the bed. It will only take another thirty seconds.</p><p class="cons-txt">As she is lowered onto the bed she cries out again. Her face is pale. Linda arrives and assesses her immediately.</p><hr class="cons-div"><p class="cons-txt hl">She told you she was in pain. What happened?</p></div>
+      <p class="piv-q">What should you have done the moment she said stop?</p>
+      <button class="rev-btn" id="rev-btn">Show me what should have happened</button>
+      <div class="fin-rev" id="fin-rev">
+        <p class="fin-txt">Continuing a transfer when a resident reports pain risks worsening an injury you cannot undo. Stopping is more important than getting her somewhere comfortable.</p>
+        <div class="fin-hl"><p class="fin-hl-text">Pain during a lift is a stop signal. Lower the resident immediately. Do not continue the task and do not assume the pain will pass.</p></div>
+        <div class="lq-card" id="lq-no">
+          <div class="lq-left"><div class="lq-text">This is why we check the sling fit every time. Not just the first time.</div></div>
+          <div class="lq-right"><img class="lq-qmark" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/quote.png" onerror="this.style.display='none'" alt=""><img class="lq-avatar" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Linda_Quote.png" onerror="this.src='https://picsum.photos/seed/lindaqb/200/300'" alt="Linda"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- SLIDE 5 -->
+<div class="slide" id="slide-5">
+  <div class="lesson-header" style="background:linear-gradient(135deg,#035580,#0475AC)"><div class="lesson-num">Lesson 5 of 5</div><div class="lesson-title-h">An Honest Moment...</div></div>
+  <div class="completion-wrap"><div class="completion-icon">✅</div><div class="completion-title">Well done.</div><p class="completion-text">When we show up to the present moment with all of our senses, we invite the world to fill us with joy. The pains of the past are behind us. The future has yet to unfold. But the now is full of beauty simply waiting for our attention.</p><div class="completion-badge">Course completed</div><p style="margin-top:16px;font-size:13px;color:var(--muted)">Your completion has been recorded.</p></div>
+</div>
+
+</div><!-- /content-area -->
+
+<div id="continue-bar">
+  <button id="continue-btn"><span id="continue-label">Start</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+</div>
+
+<script>
+/* ═══ ENGINE ═══════════════════════════════════════════ */
+var TOTAL=6;
+var LESSONS=['Before you begin',"She's back!",'Meeting Mrs. Okonwo','At Cedar Wing: The Habits Get Tested','An Honest Moment...'];
+var current=0;
+var completed=new Set();
+
+var SCORM={api:null,init:function(){try{this.api=window.API||(window.parent&&window.parent.API)||null;if(this.api)this.api.LMSInitialize('');}catch(e){}},set:function(k,v){try{if(this.api)this.api.LMSSetValue(k,v);}catch(e){}},commit:function(){try{if(this.api)this.api.LMSCommit('');}catch(e){}},finish:function(){try{if(this.api)this.api.LMSFinish('');}catch(e){}}};
+
+function saveProgress(data){
+  if(window.LMSBridge&&window.LMSBridge.saveProgress)window.LMSBridge.saveProgress(JSON.stringify(data));
+  try{localStorage.setItem('sr_msi',JSON.stringify(data));}catch(e){}
+  SCORM.set('cmi.core.lesson_location',data.slide);SCORM.commit();
+}
+function loadProgress(){
+  if(window.LMSBridge&&window.LMSBridge.getProgress){try{return JSON.parse(window.LMSBridge.getProgress());}catch(e){}}
+  try{var s=localStorage.getItem('sr_msi');return s?JSON.parse(s):null;}catch(e){return null;}
+}
+
+function showSlide(idx){
+  document.querySelectorAll('.slide').forEach(function(s){s.classList.remove('active');});
+  var t=document.getElementById('slide-'+idx);
+  if(t){t.classList.add('active');document.getElementById('content-area').scrollTo(0,0);}
+  current=idx;updateProgressBar();updateMenu();updateContinueBtn();animateFadeUps();
+  saveProgress({slide:idx,completed:Array.from(completed)});
+}
+function nextSlide(){
+  completed.add(current);
+  if(current<TOTAL-1)showSlide(current+1);
+  if(current===TOTAL-1){SCORM.set('cmi.core.lesson_status','completed');SCORM.set('cmi.core.score.raw','100');SCORM.commit();SCORM.finish();}
+}
+function updateProgressBar(){document.getElementById('progress-fill').style.width=((current/(TOTAL-1))*100)+'%';}
+function updateContinueBtn(){
+  var bar=document.getElementById('continue-bar');var lbl=document.getElementById('continue-label');
+  if(current===TOTAL-1){bar.classList.add('hidden');return;}
+  bar.classList.remove('hidden');lbl.textContent=current===0?'Start':'Continue';
+}
+function animateFadeUps(){
+  var els=document.querySelectorAll('#slide-'+current+' .fu:not(.seen)');
+  var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('visible','seen');obs.unobserve(e.target);}});},{threshold:0.1});
+  els.forEach(function(el,i){el.style.transitionDelay=(i*.07)+'s';obs.observe(el);});
+}
+
+/* ═══ MENU ═══════════════════════════════════════════ */
+function buildMenu(){
+  var c=document.getElementById('menu-lessons');
+  LESSONS.forEach(function(title,i){
+    var div=document.createElement('div');
+    div.className='menu-lesson locked';div.dataset.idx=i+1;
+    div.innerHTML='<div class="lesson-dot"><span class="lesson-dot-num">'+(i+1)+'</span><span class="lesson-dot-check">✓</span></div><div class="menu-lesson-title">'+title+'</div>';
+    div.addEventListener('click',function(){if(!div.classList.contains('locked')){showSlide(i+1);closeMenu();}});
+    c.appendChild(div);
+  });
+}
+function updateMenu(){
+  document.querySelectorAll('.menu-lesson').forEach(function(el){
+    var idx=parseInt(el.dataset.idx);
+    el.classList.remove('active','completed','locked');
+    if(idx===current)el.classList.add('active');
+    else if(idx<current||completed.has(idx))el.classList.add('completed');
+    else el.classList.add('locked');
+  });
+}
+var hamburger=document.getElementById('hamburger');
+var menuOverlay=document.getElementById('menu-overlay');
+hamburger.addEventListener('click',function(){menuOverlay.classList.contains('open')?closeMenu():openMenu();});
+menuOverlay.addEventListener('click',function(e){if(e.target===menuOverlay)closeMenu();});
+document.getElementById('menu-close').addEventListener('click',closeMenu);
+function openMenu(){menuOverlay.classList.add('open');hamburger.classList.add('open');hamburger.setAttribute('aria-expanded','true');}
+function closeMenu(){menuOverlay.classList.remove('open');hamburger.classList.remove('open');hamburger.setAttribute('aria-expanded','false');}
+
+/* ═══ POPUP ═══════════════════════════════════════════ */
+var HS_DATA=[
+  {title:'Sling not fitted',text:'The sling is here but not attached. It must be checked and correctly positioned before any transfer begins.'},
+  {title:'Wrong equipment',text:'A walker should not be here for a non-weight bearing resident. Remove it before the transfer begins.'},
+  {title:'Clear the path',text:'The lift path must be completely clear. Move anything that could obstruct the transfer before you begin.'},
+  {title:'Ceiling track',text:'Confirm the track runs correctly over both the bed and the destination chair before fitting the sling.'}
+];
+function openPopup(title,text,imgUrl){
+  document.getElementById('popup-title').textContent=title;
+  document.getElementById('popup-text').textContent=text;
+  var img=document.getElementById('popup-img');
+  if(imgUrl){img.src=imgUrl;img.style.display='block';}else img.style.display='none';
+  document.getElementById('popup-overlay').classList.add('open');
+}
+function closePopup(){document.getElementById('popup-overlay').classList.remove('open');}
+document.getElementById('popup-overlay').addEventListener('click',function(e){if(e.target===document.getElementById('popup-overlay'))closePopup();});
+document.getElementById('popup-close-btn').addEventListener('click',closePopup);
+
+/* ═══ FLIP CARD ═══════════════════════════════════════ */
+function setFlipHeight(){
+  var back=document.getElementById('flipBack');var card=document.getElementById('flipCard');
+  if(back&&card){var h=back.offsetHeight;if(h>0)card.style.minHeight=h+'px';}
+}
+window.addEventListener('load',setFlipHeight);window.addEventListener('resize',setFlipHeight);setTimeout(setFlipHeight,800);
+document.getElementById('fp-wrap').addEventListener('click',function(){
+  document.getElementById('flipCard').classList.toggle('flipped');
+  setTimeout(setFlipHeight,750);
+});
+
+/* ═══ ACCORDION ═══════════════════════════════════════ */
+document.querySelectorAll('.acc-trigger').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var item=btn.closest('.acc-item');
+    var isOpen=item.classList.contains('open');
+    document.querySelectorAll('.acc-item').forEach(function(i){i.classList.remove('open');});
+    if(!isOpen)item.classList.add('open');
+  });
+});
+
+/* ═══ POSITIONING ACCORDION ═══════════════════════════ */
+var posOpened=[false,false,false,false];
+['pc-0','pc-1','pc-2','pc-3'].forEach(function(id,i){
+  var el=document.getElementById(id);
+  if(el){
+    el.querySelector('.pos-trig').addEventListener('click',function(){
+      var isOpen=el.classList.contains('open');
+      document.querySelectorAll('.pos-card').forEach(function(c){c.classList.remove('open');});
+      if(!isOpen){el.classList.add('open');posOpened[i]=true;}
+      if(posOpened.filter(Boolean).length===4)document.getElementById('pos-highlight').style.display='block';
+    });
+  }
+});
+
+/* ═══ HOTSPOT ═════════════════════════════════════════ */
+var hsClicked=[false,false,false,false];
+['hsm-0','hsm-1','hsm-2','hsm-3'].forEach(function(id,i){
+  var el=document.getElementById(id);
+  if(el){
+    el.addEventListener('click',function(){
+      el.classList.add('clicked');hsClicked[i]=true;
+      document.getElementById('hsd-'+i).classList.add('done');
+      var d=HS_DATA[i];
+      document.getElementById('hs-title').textContent=d.title;
+      document.getElementById('hs-text').textContent=d.text;
+      var p=document.getElementById('hs-panel');
+      p.classList.remove('visible');p.classList.add('show');
+      setTimeout(function(){p.classList.add('visible');},20);
+      var c=hsClicked.filter(Boolean).length;
+      document.getElementById('hs-prog-text').textContent=c===4?'All four spotted':c+' of 4 spotted';
+    });
+  }
+});
+
+/* ═══ TRUE/FALSE ═══════════════════════════════════════ */
+var tfCards=[
+  {text:"You should check the sling fit before raising the resident.",correct:true,cfb:"Correct. The sling must be checked for correct fit and positioning before raising. Once the resident is lifted, adjustments are dangerous.",ifb:"This is actually True. The sling must always be checked before raising. Adjusting it mid-lift is dangerous for both the resident and the worker."},
+  {text:"Both workers should agree on a verbal signal before the lift begins.",correct:true,cfb:"Correct. A clear verbal cue agreed between both staff reduces surprise, minimises resistance, and keeps both workers coordinated.",ifb:"This is actually True. A shared verbal signal keeps both workers coordinated and helps the resident understand what is about to happen."},
+  {text:"It is acceptable to use a ceiling lift with one worker if the resident is cooperative.",correct:false,cfb:"Correct. Resident cooperation does not remove the two-person requirement. Unexpected movement during a lift can create serious risk regardless.",ifb:"This is False. No matter how cooperative a resident is, the handling plan sets the minimum staffing requirement."},
+  {text:"If a resident reports pain during a lift, you stop and lower them immediately.",correct:true,cfb:"Correct. Pain during a lift is a stop signal. Lower the resident safely and immediately. Do not continue the task.",ifb:"This is actually True. Pain during a lift means stop and lower immediately. Continuing risks worsening an injury you cannot undo."}
+];
+var tfCur=0,tfScore=0;
+function tfLoad(){
+  var c=tfCards[tfCur];
+  document.getElementById('tf-txt').textContent=c.text;
+  document.getElementById('tf-fb').className='tf-fb';document.getElementById('tf-fb').textContent='';
+  document.getElementById('tf-card').className='tf-card';
+  document.getElementById('tf-counter').textContent='Statement '+(tfCur+1)+' of '+tfCards.length;
+  document.getElementById('tf-pf').style.width=(((tfCur+1)/tfCards.length)*100)+'%';
+  document.getElementById('tf-true').disabled=false;document.getElementById('tf-false').disabled=false;
+  document.getElementById('tf-nx').className='tf-nx';
+  document.getElementById('tf-nx').textContent=tfCur===tfCards.length-1?'See results →':'Next →';
+}
+function tfAnswer(isTrue){
+  var c=tfCards[tfCur];var ok=isTrue===c.correct;if(ok)tfScore++;
+  document.getElementById('tf-true').disabled=true;document.getElementById('tf-false').disabled=true;
+  document.getElementById('tf-card').className='tf-card '+(ok?'ac':'ai');
+  var fb=document.getElementById('tf-fb');fb.textContent=ok?c.cfb:c.ifb;fb.className='tf-fb show '+(ok?'cfb':'ifb');
+  document.getElementById('tf-nx').className='tf-nx show';
+}
+function tfNext(){
+  if(tfCur<tfCards.length-1){tfCur++;tfLoad();}
+  else{
+    document.getElementById('tf-game').style.display='none';
+    var bar=document.getElementById('tf-score-bar');
+    if(tfScore===tfCards.length){bar.className='tf-score-bar allc';document.getElementById('tf-score-bar-text').textContent='You got all four right.';document.getElementById('tf-score-text').textContent='You know the rules around ceiling lift safety. Now the challenge is applying them in the moment.';}
+    else{bar.className='tf-score-bar somew';document.getElementById('tf-score-bar-text').textContent=tfScore+' of 4 correct.';document.getElementById('tf-score-text').textContent='Some of these feel like judgment calls in the moment — but they are not. The handling plan sets the rules.';}
+    document.getElementById('tf-final').classList.add('show');
+  }
+}
+document.getElementById('tf-true').addEventListener('click',function(){tfAnswer(true);});
+document.getElementById('tf-false').addEventListener('click',function(){tfAnswer(false);});
+document.getElementById('tf-nx').addEventListener('click',tfNext);
+tfLoad();
+
+/* ═══ MCQ ═════════════════════════════════════════════ */
+var mqSelected=null,mqCorrect='b';
+var mqAdvice={a:"You just described the exact decision Priya made six weeks ago. Familiarity with a task does not protect you from the mechanics of an awkward position. Adjust the bed first.",c:"Encouraging resident participation is a good instinct. But asking Mr. Kowalski to self-reposition before you have set up the environment safely does not remove your risk. Set up first.",d:"This puts the slide sheet into position before the environment is set up correctly. You will likely need to lean over the resident to reach the bed controls. Bed height first."};
+['mq-a','mq-b','mq-c','mq-d'].forEach(function(id){
+  document.getElementById(id).addEventListener('click',function(){
+    mqSelected=id.replace('mq-','');
+    document.querySelectorAll('.mcq-opt').forEach(function(o){o.classList.remove('sel');});
+    document.getElementById(id).classList.add('sel');
+    document.getElementById('mq-submit').disabled=false;
+  });
+});
+document.getElementById('mq-submit').addEventListener('click',function(){
+  if(!mqSelected)return;
+  document.getElementById('mq-submit').disabled=true;
+  document.querySelectorAll('.mcq-opt').forEach(function(o){o.classList.add('dis');o.classList.remove('sel');});
+  if(mqSelected===mqCorrect){
+    document.getElementById('mq-'+mqSelected).classList.add('cor');
+    document.getElementById('mq-cor').classList.add('show');
+  }else{
+    document.getElementById('mq-'+mqSelected).classList.add('inc');
+    document.getElementById('mq-'+mqCorrect).classList.add('cor');
+    document.getElementById('mq-iht').textContent=mqSelected==='a'?'That is the decision Priya made.':'There is a safer first step here.';
+    document.getElementById('mq-lad').textContent=mqAdvice[mqSelected];
+    document.getElementById('mq-inc').classList.add('show');
+  }
+});
+
+/* ═══ CHARACTER QUOTE OBSERVER ═════════════════════════ */
+var cqObs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('visible');cqObs.unobserve(e.target);}});},{threshold:.3});
+var cqEl=document.getElementById('cq-card');if(cqEl)cqObs.observe(cqEl);
+
+/* ═══ DECISION ═════════════════════════════════════════ */
+var dcChosen=false;
+document.getElementById('dc-yes').addEventListener('click',function(){dcChoose('yes');});
+document.getElementById('dc-no').addEventListener('click',function(){dcChoose('no');});
+document.getElementById('rev-btn').addEventListener('click',function(){
+  document.getElementById('fin-rev').classList.add('show');
+  this.disabled=true;this.style.background='#16a34a';this.textContent='Stopping is always the right call';
+  setTimeout(function(){var el=document.getElementById('lq-no');if(el)el.classList.add('visible');},400);
+});
+function dcChoose(ans){
+  if(dcChosen)return;dcChosen=true;
+  document.getElementById('dc-yes').disabled=true;document.getElementById('dc-no').disabled=true;
+  if(ans==='yes'){
+    document.getElementById('dc-yes').classList.add('sy');
+    document.getElementById('panel-yes').classList.add('show');
+    setTimeout(function(){var el=document.getElementById('lq-yes');if(el)el.classList.add('visible');},400);
+  }else{
+    document.getElementById('dc-no').classList.add('sn');
+    document.getElementById('panel-no').classList.add('show');
+  }
+}
+
+/* ═══ CONTINUE ═════════════════════════════════════════ */
+document.getElementById('continue-btn').addEventListener('click',nextSlide);
+
+/* ═══ INIT ═════════════════════════════════════════════ */
+SCORM.init();buildMenu();
+var saved=loadProgress();
+if(saved&&saved.slide>0){if(saved.completed)saved.completed.forEach(function(i){completed.add(i);});showSlide(saved.slide);}
+else showSlide(0);
+</script>
+</body>
+</html>
