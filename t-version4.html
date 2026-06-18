@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Safe Handling and MSI Prevention · Course 2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --primary:#0475AC;--primary-dk:#035580;--teal:#0E9DBD;--teal-lt:#E2F6FB;
+  --amber:#D97706;--amber-lt:#FEF3C7;--green:#16A34A;--green-lt:#DCFCE7;
+  --red:#DC2626;--red-lt:#FEE2E2;--ink:#16203A;--muted:#5A6276;
+  --line:#E7EBF1;--r:18px;--r-sm:12px;--ease:cubic-bezier(.4,0,.2,1);--body:'Inter',system-ui,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:var(--body);color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+#app{position:relative;height:100%;max-width:480px;margin:0 auto;display:flex;flex-direction:column;background:#fff}
+
+/* TOP */
+#top{padding:14px 18px 10px;flex-shrink:0}
+#toprow{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+#clock{display:inline-flex;align-items:center;gap:7px;background:#F3F7FA;border:1px solid var(--line);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:700;color:var(--primary)}
+#clock .d{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+#sec-label{font-size:13px;font-weight:700;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#menu-btn{width:38px;height:38px;border:1px solid var(--line);background:#fff;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+#menu-btn:active{transform:scale(.94)}
+#ticks{display:flex;gap:5px}
+#ticks .t{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+#ticks .t i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--primary));border-radius:3px;transition:width .5s var(--ease)}
+
+/* STAGE */
+#stage{flex:1;position:relative;overflow-y:auto;overflow-x:hidden;padding:10px 18px 22px}
+#stage::-webkit-scrollbar{display:none}
+.card{animation:cardIn .45s var(--ease) both}
+.card.out{animation:cardOut .22s var(--ease) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cardOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-16px)}}
+
+/* NAV */
+#nav{flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 18px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#fff}
+#back{width:48px;height:48px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .12s,opacity .2s}
+#back:active{transform:scale(.9)}
+#back.hide{visibility:hidden;opacity:0}
+#tapcue{flex:1;text-align:center;font-size:13px;font-weight:600;color:#AAB3C0;letter-spacing:.02em;opacity:0;transition:opacity .3s}
+#tapcue.show{opacity:1;animation:cuePulse 1.8s ease-in-out infinite}
+@keyframes cuePulse{0%,100%{opacity:.5}50%{opacity:.95}}
+#fwd{margin-left:auto;height:52px;min-width:52px;border:none;border-radius:26px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 24px;font-size:16px;font-weight:700;transition:transform .12s,background .25s,padding .25s;box-shadow:0 6px 18px rgba(4,117,172,.28)}
+#fwd.icon{padding:0;width:52px;min-width:52px}
+#fwd.locked{background:#CBD3DC;box-shadow:none;pointer-events:none}
+#fwd:active{transform:scale(.93)}
+#fwd .chev{display:flex}
+#fwd:not(.locked) .chev{animation:nudge 1.5s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+
+/* GENERIC */
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:10px}
+.beat{padding:14px 0}
+.beat p{font-size:20px;line-height:1.72;color:var(--ink);font-weight:400}
+.beat p+p{margin-top:15px}
+.beat strong{color:var(--primary);font-weight:700}
+.beat em{font-style:normal;color:#3C4459;display:block;font-size:18px;line-height:1.7;background:#F7F9FB;border-left:3px solid var(--teal);padding:14px 16px;border-radius:0 12px 12px 0}
+.scene-img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--r);display:block;margin-bottom:18px;background:#EEF2F6}
+
+/* COVER */
+.cover .eyebrow{color:var(--teal)}
+.cover h2{font-size:31px;font-weight:800;color:var(--primary);line-height:1.16;margin-bottom:14px}
+.cover p{font-size:19px;line-height:1.72;color:var(--muted)}
+
+/* OPENER */
+.opener .kick{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);margin-bottom:12px}
+.opener h2{font-size:25px;font-weight:800;color:var(--ink);line-height:1.3;margin-bottom:14px}
+.opener .scn{font-size:19px;line-height:1.65;color:var(--ink);margin-bottom:20px}
+.op-choice{display:flex;flex-direction:column;gap:12px}
+.op-btn{text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:17px 18px;font-size:17px;font-weight:600;line-height:1.45;color:var(--ink);display:flex;gap:13px;align-items:center;transition:transform .14s,border-color .2s,background .2s}
+.op-btn .ei{font-size:22px}
+.op-btn:active{transform:scale(.98)}
+.op-btn.pick{border-color:var(--primary);background:#EFF8FC}
+.op-reveal{margin-top:18px;font-size:18px;line-height:1.68;color:var(--ink);display:none}
+.op-reveal.show{display:block;animation:cardIn .45s both}
+.op-reveal .tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:8px}
+
+/* SECTION DIVIDER */
+.sectioncard{padding:20px 4px 8px}
+.sectioncard .num{font-size:66px;font-weight:800;color:var(--teal-lt);line-height:1}
+.sectioncard .nm{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:4px 0 10px}
+.sectioncard h2{font-size:30px;font-weight:800;color:var(--primary);line-height:1.2}
+.sectioncard .t{font-size:15px;color:var(--muted);margin-top:13px;font-weight:600}
+
+/* PULL QUOTE (no bubble) */
+.quote{padding:16px 2px 18px}
+.quote .qm{font-family:Georgia,serif;font-size:54px;color:var(--teal);line-height:.1;height:22px;display:block}
+.quote .qt{font-size:22px;line-height:1.5;font-weight:600;color:var(--ink);margin:14px 0 16px}
+.quote .by{display:flex;align-items:center;gap:11px}
+.quote .by .nm{font-size:14px;font-weight:700;color:var(--primary)}
+.quote .by .rl{font-size:13px;color:var(--muted)}
+.av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px}
+
+/* LEARN (no label) */
+.learn{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.learn .hd{background:var(--primary);color:#fff;padding:16px 18px}
+.learn .hd h3{font-size:20px;font-weight:700;line-height:1.3}
+.learn .bd{padding:17px 18px}
+.learn .bd>p{font-size:18px;line-height:1.7;color:var(--ink)}
+.learn ul{list-style:none;margin:13px 0 0}
+.learn li{display:flex;gap:11px;font-size:17px;line-height:1.6;color:var(--ink);padding:8px 0}
+.learn li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal);margin-top:10px;flex-shrink:0}
+.learn .hl{margin-top:15px;background:var(--teal-lt);border-radius:11px;padding:13px 15px;font-size:17px;font-weight:600;color:var(--primary-dk);line-height:1.55}
+
+/* FLIP PLAN */
+.flip{perspective:1400px;margin:8px 0;height:372px}
+.flip-in{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s var(--ease)}
+.flip.open .flip-in{transform:rotateY(180deg)}
+.flip-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:1.5px solid var(--line);border-radius:var(--r);background:#fff;overflow:hidden}
+.flip-front{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.flip-front .pic{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:34px;overflow:hidden;margin-bottom:14px}
+.flip-front .pic img{width:100%;height:100%;object-fit:cover}
+.flip-front .fname{font-size:23px;font-weight:800;color:var(--ink)}
+.flip-front .ftags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:10px 0 18px}
+.flip-front .pill{font-size:12px;font-weight:700;background:#EEF2F6;color:var(--muted);padding:4px 11px;border-radius:20px}
+.flip-front .prompt{display:inline-flex;align-items:center;gap:8px;color:var(--primary);font-size:14px;font-weight:700;background:var(--teal-lt);padding:9px 16px;border-radius:999px}
+.flip-front .prompt svg{animation:spin 3.5s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.flip-back{transform:rotateY(180deg);display:flex;flex-direction:column}
+.flip-back .bh{background:var(--primary);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.flip-back .bh .bn{font-size:16px;font-weight:700}
+.flip-back .bh .bf{font-size:12px;font-weight:600;opacity:.85;display:flex;align-items:center;gap:5px}
+.flip-back .bb{padding:6px 16px 16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+.flip-back .bb::-webkit-scrollbar{width:0}
+.prow{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+.prow .pi{width:18px;flex-shrink:0;display:flex;justify-content:center;padding-top:3px}
+.prow .pl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.prow .pt{font-size:15px;line-height:1.5;color:var(--ink)}
+.cg{color:var(--green)}.cr{color:var(--red)}.ca{color:var(--amber)}.cb{color:var(--primary)}
+.palert{margin-top:11px;background:var(--red-lt);color:#991B1B;border-radius:10px;padding:11px 13px;font-size:14px;font-weight:600;line-height:1.5}
+
+/* ACTIVITY SHELL */
+.act{border:1.5px solid var(--line);border-radius:var(--r);padding:18px}
+.act .tag{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:5px 13px;border-radius:20px;margin-bottom:13px}
+.act h3{font-size:19px;font-weight:700;color:var(--primary);margin-bottom:7px}
+.act .q{font-size:18px;line-height:1.6;color:var(--ink);margin-bottom:15px;font-weight:500}
+
+/* ORDER */
+.oitem{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:9px;transition:border-color .2s}
+.oitem .ot{flex:1;font-size:15.5px;font-weight:500;line-height:1.45}
+.oitem .obtns{display:flex;flex-direction:column;gap:4px}
+.oitem .ob{width:32px;height:28px;border:1px solid var(--line);background:#F3F7FA;border-radius:7px;font-size:13px;color:var(--primary)}
+.oitem.ok{border-color:var(--green);background:var(--green-lt)}
+.oitem.no{border-color:var(--amber)}
+
+/* CHOICES */
+.opt{display:flex;gap:12px;align-items:flex-start;border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:9px;transition:border-color .2s,background .2s}
+.opt .lt{width:27px;height:27px;border-radius:7px;background:#F3F7FA;color:var(--primary);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.opt .ox{font-size:16px;line-height:1.5;color:var(--ink)}
+.opt.sel{border-color:var(--primary);background:#EFF8FC}.opt.sel .lt{background:var(--primary);color:#fff}
+.opt.ok{border-color:var(--green);background:var(--green-lt)}.opt.ok .lt{background:var(--green);color:#fff}
+.opt.bad{border-color:var(--red);background:var(--red-lt)}.opt.bad .lt{background:var(--red);color:#fff}
+.opt.dis{opacity:.55;pointer-events:none}
+.subbtn{width:100%;border:none;border-radius:11px;padding:14px;font-size:16px;font-weight:700;color:#fff;background:var(--primary);margin-top:4px;transition:opacity .2s}
+.subbtn:disabled{background:#CBD3DC}
+
+/* FEEDBACK */
+.fb{margin-top:14px;border-radius:12px;overflow:hidden;border:1px solid var(--line);display:none}
+.fb.show{display:block;animation:cardIn .4s var(--ease) both}
+.fb .fh{padding:11px 14px;font-size:14px;font-weight:700;color:#fff;display:flex;align-items:center;gap:7px}
+.fb.good .fh{background:var(--green)}.fb.bad .fh{background:var(--amber)}
+.fb .fbody{padding:14px;background:#fff}
+.fb .ft{font-size:15.5px;line-height:1.6;color:var(--ink)}.fb .ft+.ft{margin-top:8px}
+.linda{display:flex;gap:11px;align-items:flex-start;margin-top:10px;background:#F3F7FA;border-radius:12px;padding:12px}
+.linda .who{font-size:13px;font-weight:700;color:var(--primary);margin-bottom:3px}
+.linda .lx{font-size:15px;line-height:1.6;color:var(--ink)}
+
+/* TRUE FALSE */
+.tf-pb{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin-bottom:8px}
+.tf-pf{height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--primary));transition:width .4s var(--ease)}
+.tf-ct{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:12px}
+.tf-card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:22px 16px;min-height:124px;display:flex;align-items:center;justify-content:center;text-align:center}
+.tf-txt{font-size:19px;font-weight:600;line-height:1.5;color:var(--ink)}
+.tf-btns{display:flex;gap:10px;margin-top:12px}
+.tf-btn{flex:1;border:1.5px solid;border-radius:12px;padding:15px;font-size:16px;font-weight:700;background:#fff;display:flex;align-items:center;justify-content:center;gap:7px}
+.tf-t{color:var(--green);border-color:var(--green)}.tf-f{color:var(--red);border-color:var(--red)}
+.tf-fb{margin-top:12px;border-radius:12px;padding:13px 14px;font-size:15px;line-height:1.6;display:none}
+.tf-fb.show{display:block;animation:cardIn .35s both}
+.tf-fb.good{background:var(--green-lt);color:#14532D}.tf-fb.bad{background:var(--amber-lt);color:#7C2D12}
+.tf-nx{margin-top:10px;width:100%;border:none;background:var(--primary);color:#fff;border-radius:11px;padding:13px;font-weight:700;font-size:15px;display:none}
+.tf-nx.show{display:block}
+
+/* CONFIRM CHECKLIST */
+.ck{display:flex;align-items:center;gap:13px;border:1.5px solid var(--line);border-radius:13px;padding:15px;margin-bottom:10px;transition:border-color .2s,background .2s}
+.ck .box{width:28px;height:28px;border-radius:8px;border:2px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;transition:background .2s,border-color .2s}
+.ck .ckt{font-size:16px;font-weight:500;line-height:1.45;color:var(--ink)}
+.ck.on{border-color:var(--green);background:var(--green-lt)}
+.ck.on .box{background:var(--green);border-color:var(--green)}
+.ck-done{margin-top:6px;font-size:15px;font-weight:600;color:var(--green);display:none}
+.ck-done.show{display:block;animation:cardIn .35s both}
+
+/* DECISION */
+.dc-opts{display:flex;gap:10px;flex-wrap:wrap}
+.dc-btn{flex:1;min-width:140px;border:1.5px solid;border-radius:12px;padding:16px;font-size:15px;font-weight:700;background:#fff}
+.dc-y{color:var(--green);border-color:var(--green)}.dc-n{color:var(--red);border-color:var(--red)}
+.dc-btn.sel-y{background:var(--green-lt)}.dc-btn.sel-n{background:var(--red-lt)}
+.revbtn{margin-top:14px;width:100%;border:1.5px solid var(--primary);background:#fff;color:var(--primary);border-radius:11px;padding:13px;font-weight:700;font-size:15px}
+.finbox{margin-top:12px;background:var(--green-lt);border-radius:12px;padding:14px;font-size:15px;line-height:1.6;color:#14532D;display:none}
+.finbox.show{display:block;animation:cardIn .35s both}
+
+/* TAP REVEAL */
+.tr{border:1.5px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:9px;transition:border-color .2s}
+.tr.open{border-color:var(--teal)}
+.tr .th{display:flex;align-items:center;gap:12px;padding:15px;cursor:pointer}
+.tr .tn{width:30px;height:30px;border-radius:8px;background:var(--teal-lt);color:var(--primary);font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tr .ttl{flex:1;font-size:16px;font-weight:600;color:var(--ink)}
+.tr .tchev{color:var(--muted);transition:transform .3s}.tr.open .tchev{transform:rotate(180deg)}
+.tr .tb{max-height:0;overflow:hidden;transition:max-height .35s var(--ease)}.tr.open .tb{max-height:260px}
+.tr .tb-in{padding:0 15px 15px}
+.tr .rf{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);margin-bottom:2px}
+.tr .rv{font-size:15px;line-height:1.55;color:var(--ink);margin-bottom:10px}
+.tr .df{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green);margin-bottom:2px}
+
+/* HOLD */
+.hold{text-align:center;padding:8px 0 4px}
+.hold .hi{font-size:20px;font-weight:700;color:var(--primary);margin-bottom:7px}
+.hold .hs{font-size:16px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+.holdbtn{position:relative;width:148px;height:148px;border-radius:50%;border:none;background:transparent;margin:0 auto;display:block;touch-action:none}
+.holdbtn svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.holdbtn .tk{fill:none;stroke:var(--line);stroke-width:8}
+.holdbtn .pr{fill:none;stroke:var(--teal);stroke-width:8;stroke-linecap:round;stroke-dasharray:427;stroke-dashoffset:427;transition:stroke-dashoffset .08s linear}
+.holdbtn .fc{position:absolute;inset:17px;border-radius:50%;background:#F3F7FA;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:background .2s}
+.holdbtn.on .fc{background:var(--teal-lt)}
+.holdbtn.done .fc{background:var(--green-lt);border-color:var(--green)}
+.holdbtn .ic{font-size:32px}.holdbtn .lb{font-size:13px;font-weight:700;color:var(--muted)}
+.hold .hl2{min-height:22px;margin-top:15px;font-size:16px;font-weight:600;color:var(--ink)}
+
+/* RECAP */
+.recap-item{display:flex;gap:13px;align-items:flex-start;border:1px solid var(--line);border-radius:13px;padding:15px;margin-bottom:9px;opacity:0;transform:translateY(12px);transition:opacity .4s,transform .4s}
+.recap-item.in{opacity:1;transform:translateY(0)}
+.recap-item .rn{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.recap-item p{font-size:16px;line-height:1.6;color:var(--ink)}
+
+/* COMPLETE */
+.done-wrap{text-align:center;padding:38px 6px}
+.done-ring{width:90px;height:90px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:var(--green);font-size:44px;animation:pop .5s var(--ease) both}
+@keyframes pop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.done-wrap h2{font-size:29px;font-weight:800;color:var(--primary);line-height:1.2;margin-bottom:12px}
+.done-wrap p{font-size:18px;line-height:1.7;color:var(--muted);max-width:350px;margin:0 auto 24px}
+.replay{border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:11px;padding:13px 24px;font-weight:700;font-size:15px}
+
+/* CONFETTI */
+#confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:50}
+.cf{position:absolute;width:8px;height:8px;border-radius:2px;animation:fall 1.1s ease-out forwards}
+@keyframes fall{to{transform:translateY(380px) rotate(360deg);opacity:0}}
+
+/* SIDE DRAWER */
+#drawer{position:absolute;inset:0;z-index:80;background:rgba(15,22,40,.45);opacity:0;pointer-events:none;transition:opacity .25s}
+#drawer.open{opacity:1;pointer-events:auto}
+#drawer-card{position:absolute;top:0;right:0;bottom:0;width:80%;max-width:310px;background:#fff;transform:translateX(100%);transition:transform .32s var(--ease);padding:0 0 env(safe-area-inset-bottom);display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.18)}
+#drawer.open #drawer-card{transform:translateX(0)}
+.dh{display:flex;align-items:center;justify-content:space-between;padding:20px 18px 12px;border-bottom:1px solid var(--line)}
+.dh span{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.dh button{width:34px;height:34px;border:none;background:#F3F7FA;border-radius:50%;font-size:20px;color:var(--ink);display:flex;align-items:center;justify-content:center}
+#drawer-list{padding:8px 12px;overflow-y:auto}
+.sl{display:flex;align-items:center;gap:13px;padding:14px 8px;border-radius:11px;cursor:pointer}
+.sl:active{background:#F3F7FA}
+.sl .sd{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted);flex-shrink:0}
+.sl.done .sd{background:var(--primary);border-color:var(--primary);color:#fff}
+.sl.cur .sd{border-color:var(--primary);color:var(--primary)}
+.sl .sn{font-size:16px;font-weight:600;color:var(--ink)}
+.sl.cur .sn{color:var(--primary);font-weight:700}
+
+/* ===== ROUND 3 ===== */
+.opt .ox{font-size:17px;line-height:1.55}
+.linda .lx{font-size:16px;line-height:1.62}
+.prow .pt{font-size:15.5px;line-height:1.55}
+.prow .pl{font-size:12px}
+.act .q{font-size:18px}
+.learn li>div{flex:1;min-width:0}
+
+/* cover hero button centered */
+.cover-cta{display:flex;justify-content:center;margin:28px 0 6px}
+.cover-cta button{border:none;border-radius:30px;background:var(--primary);color:#fff;font-size:17px;font-weight:700;padding:16px 30px;display:inline-flex;align-items:center;gap:10px;box-shadow:0 8px 22px rgba(4,117,172,.32)}
+.cover-cta button:active{transform:scale(.96)}
+
+/* plan flip front with big image */
+.flip{height:580px}
+.flip-front{padding:0;align-items:stretch;justify-content:flex-end}
+.flip-front .pfimg{position:absolute;inset:0}
+.flip-front .pfimg img{width:100%;height:100%;object-fit:cover}
+.flip-front .pf-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:64px;font-weight:800}
+.flip-front .pfshade{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,15,30,.85) 0%,rgba(8,15,30,.22) 48%,rgba(8,15,30,0) 74%)}
+.flip-front .pfinfo{position:relative;z-index:2;padding:22px 20px;text-align:left;width:100%}
+.flip-front .fname{font-size:25px;font-weight:800;color:#fff}
+.flip-front .ftags{justify-content:flex-start;margin:10px 0 14px}
+.flip-front .ftags .pill{background:rgba(255,255,255,.22);color:#fff}
+.flip-front .prompt{background:#fff;color:var(--primary)}
+
+/* image + speech callout */
+.callout{position:relative;border-radius:18px;overflow:hidden;margin:10px 0;background:#0b1220}
+.callout .coimg{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.callout .coshade{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,15,30,.82) 0%,rgba(8,15,30,.12) 55%,rgba(8,15,30,0) 82%)}
+.callout .cobubble{position:absolute;left:14px;right:14px;bottom:16px;background:#fff;border-radius:16px;padding:16px 17px;box-shadow:0 10px 28px rgba(0,0,0,.32)}
+.callout .cobubble::after{content:"";position:absolute;left:28px;top:-8px;width:17px;height:17px;background:#fff;transform:rotate(45deg);border-radius:3px}
+.callout .cot{font-size:19px;line-height:1.5;font-weight:600;color:var(--ink);position:relative;z-index:1}
+.callout .coby{display:flex;align-items:center;gap:9px;margin-top:12px;position:relative;z-index:1}
+.callout .coby .nm{font-size:13.5px;font-weight:700;color:var(--primary)}
+.callout .coby .rl{font-size:12.5px;color:var(--muted)}
+.callout.focus .cobubble{background:var(--ink)}
+.callout.focus .cobubble::after{background:var(--ink)}
+.callout.focus .cot{color:#fff;font-size:22px;font-weight:700;line-height:1.45}
+.callout.focus .coby .nm{color:#7CD4E6}
+.callout.focus .coby .rl{color:#AEB6C6}
+.co-kick{position:absolute;top:14px;left:14px;z-index:3;background:var(--amber);color:#fff;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;border-radius:20px}
+.co-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;overflow:hidden;flex-shrink:0}
+.co-av img{width:100%;height:100%;object-fit:cover}
+
+/* hotspot find the hazards */
+.hs-wrap{position:relative;border-radius:16px;overflow:hidden;margin:8px 0;background:#0b1220}
+.hs-wrap img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.hs-wrap .hs-veil{position:absolute;inset:0;background:rgba(8,15,30,.14)}
+.spot{position:absolute;width:40px;height:40px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #fff;background:rgba(4,117,172,.6);color:#fff;font-size:23px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.45);animation:spulse 1.8s ease-in-out infinite;z-index:2}
+@keyframes spulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 10px rgba(255,255,255,0)}}
+.spot.found{background:var(--green);border-color:#fff;animation:none}
+.hs-tip{position:absolute;transform:translate(-50%,-118%);background:#fff;color:var(--ink);font-size:13px;font-weight:600;line-height:1.4;padding:9px 11px;border-radius:11px;box-shadow:0 6px 18px rgba(0,0,0,.35);width:180px;z-index:6;display:none}
+.hs-tip.show{display:block;animation:cardIn .3s both}
+.hs-count{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--primary);margin:13px 0 2px}
+.hs-count .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.hs-count .dot.on{background:var(--green)}
+.hs-done{margin-top:10px;font-size:15px;line-height:1.6;color:#14532D;background:var(--green-lt);border-radius:12px;padding:13px 14px;display:none}
+.hs-done.show{display:block;animation:cardIn .35s both}
+.hs-modal{position:absolute;inset:0;z-index:8;background:rgba(8,15,30,.7);display:flex;align-items:center;justify-content:center;padding:18px;opacity:0;pointer-events:none;transition:opacity .25s}
+.hs-modal.show{opacity:1;pointer-events:auto}
+.hs-modal-card{background:#fff;border-radius:14px;padding:20px 16px 16px;max-width:280px;position:relative;box-shadow:0 12px 30px rgba(0,0,0,.45);animation:pop .3s var(--ease) both}
+.hs-modal-card .hx{position:absolute;top:8px;right:8px;width:28px;height:28px;border:none;background:#F3F7FA;border-radius:50%;font-size:18px;color:var(--ink);line-height:1}
+.hs-modal-card .htx{font-size:15px;line-height:1.55;color:var(--ink);font-weight:600;padding-right:14px}
+
+/* bio popup */
+#bio{position:absolute;inset:0;z-index:90;background:rgba(15,22,40,.55);opacity:0;pointer-events:none;transition:opacity .25s;display:flex;align-items:center;justify-content:center;padding:22px}
+#bio.open{opacity:1;pointer-events:auto}
+#bio-card{width:100%;max-width:380px;max-height:80%;background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;transform:scale(.94);transition:transform .25s var(--ease);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+#bio.open #bio-card{transform:scale(1)}
+#bio-head{background:var(--primary);color:#fff;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#bio-head .bt{font-size:17px;font-weight:700}
+#bio-head button{width:32px;height:32px;border:none;background:rgba(255,255,255,.22);border-radius:50%;color:#fff;font-size:20px}
+#bio-body{padding:4px 16px 16px;overflow-y:auto}
+.biobtn{width:100%;border:1.5px solid var(--primary);background:#fff;color:var(--primary);border-radius:11px;padding:12px;font-weight:700;font-size:15px;margin-bottom:11px;display:flex;align-items:center;justify-content:center;gap:8px}
+.biobtn:active{transform:scale(.98)}
+
+/* confirm with distractors */
+.ck.bad{border-color:var(--red);background:var(--red-lt)}
+.ck.bad .box{background:var(--red);border-color:var(--red)}
+.ck-note{font-size:13.5px;line-height:1.5;color:#7C2D12;margin:-5px 0 10px 41px;display:none}
+.ck-note.show{display:block}
+
+/* true false flip */
+.tf-card{transform-style:preserve-3d}
+.tf-card.flipping{animation:tfflip .42s var(--ease)}
+@keyframes tfflip{0%{transform:rotateX(0)}45%{transform:rotateX(88deg);opacity:.15}55%{transform:rotateX(-88deg);opacity:.15}100%{transform:rotateX(0);opacity:1}}
+.tf-linda-box{background:var(--primary);border-radius:14px;padding:16px 17px;margin-top:14px}
+.tf-linda-box .lcw{font-size:12px;font-weight:700;color:#BFE6F2;margin-bottom:5px}
+.tf-linda-box .lct{font-size:16px;line-height:1.55;font-weight:600;color:#fff}
+
+/* end button */
+.endbtn{border:none;background:var(--primary);color:#fff;border-radius:11px;padding:13px 24px;font-weight:700;font-size:15px}
+.endbtn:active{transform:scale(.97)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <div id="toprow">
+      <span id="clock" style="display:none"><span class="d"></span><span id="clock-t">7:00 AM</span></span>
+      <span id="sec-label">Getting started</span>
+      <button id="menu-btn" aria-label="Sections"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
+    </div>
+    <div id="ticks"></div>
+  </div>
+  <div id="stage"></div>
+  <div id="confetti"></div>
+  <div id="nav">
+    <button id="back" class="hide" aria-label="Back"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <span id="tapcue">tap to continue</span>
+    <button id="fwd" class="icon"><span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></span></button>
+  </div>
+  <div id="drawer"><div id="drawer-card">
+    <div class="dh"><span>Your morning</span><button id="drawer-x" aria-label="Close">×</button></div>
+    <div id="drawer-list"></div>
+  </div></div>
+  <div id="bio"><div id="bio-card">
+    <div id="bio-head"><span class="bt" id="bio-title">Plan</span><button id="bio-x" aria-label="Close">×</button></div>
+    <div id="bio-body"></div>
+  </div></div>
+</div>
+
+<script>
+var SHOW_CLOCK=false;
+var SCORM=(function(){var api=null;function find(w){var n=0;while(w.API==null&&w.parent&&w.parent!=w&&n++<8)w=w.parent;return w.API;}
+return{init:function(){try{api=find(window);if(api)api.LMSInitialize("");}catch(e){}},done:function(){try{if(api){api.LMSSetValue("cmi.core.lesson_status","completed");api.LMSCommit("");}}catch(e){}}};})();
+
+var PORTRAITS={"Mrs. Grace":"https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Grace_Okinwo.png"};
+function initialOf(n){return n.replace('Mrs. ','').replace('Mr. ','').trim().charAt(0);}
+function av(name,color){var p=PORTRAITS[name];var i=initialOf(name);if(p){return '<div class="av" style="background:'+color+';padding:0;overflow:hidden"><img src="'+p+'" onerror="this.parentNode.textContent=\''+i+'\';this.remove()" style="width:100%;height:100%;object-fit:cover" alt=""></div>';}return '<div class="av" style="background:'+color+'">'+i+'</div>';}
+var C={mia:'#0E9DBD',linda:'#0475AC',grace:'#7C3AED',park:'#B45309',kim:'#0891B2'};
+function portraitOf(n){return PORTRAITS[n]||('https://picsum.photos/seed/port-'+n.replace(/\W/g,'')+'/600/800');}
+var SECIMG=["https://picsum.photos/seed/sr-staffroom/1200/675","https://picsum.photos/seed/sr-oakroom/1200/675","https://picsum.photos/seed/sr-cedar14/1200/675","https://picsum.photos/seed/sr-afternoon/1200/675","https://picsum.photos/seed/sr-breakroom/1200/675"];
+function imgFallback(sec){return "https://picsum.photos/seed/sec"+sec+"/1200/675";}
+var SECTIONS=["The morning briefing","The ceiling lift","Body mechanics and the no-lift rule","When things go wrong","What today was really about"];
+var CARDS=[
+{type:"cover",sec:0,cta:"Begin",time:"7:00 AM"},
+
+{type:"opener",sec:0,cta:"See the morning",time:"7:00 AM",
+  kick:"Before we start",
+  q:"It usually comes down to one small choice.",
+  scn:"You are running behind. The next resident needs a two person transfer with the equipment set up properly. That setup takes about two minutes you feel you do not have. Nobody is watching.",
+  a:{ei:"⏩",t:"Take the shortcut. You have done it before, you will be careful."},
+  b:{ei:"⏱️",t:"Take that two minutes. Every time."},
+  revealA:"That is the honest answer a lot of us would give on a hard day. It is also the exact choice that put Mia in physio for six weeks. This course is about why those two minutes are the task, not a delay.",
+  revealB:"That is the answer this course is built around. The hard part is never knowing it. It is doing it on your twelfth task, short staffed and already behind. Let us see how the morning goes."},
+
+{type:"section",sec:0,cta:"Start the shift",time:"7:00 AM",num:"01",name:"Section one",title:"The morning briefing",sub:"Sunrise Ridge · staff room"},
+{type:"beat",sec:0,time:"7:00 AM",img:"https://picsum.photos/seed/sr-mia-return/900/1200",ratio:"3/4",html:"<p>You are fourteen months into the job at Sunrise Ridge. You know the wings, the residents, and the rhythm of a shift.</p><p>Today is different. <strong>Mia is back.</strong> She was off for six weeks with a lower back strain from a repositioning task. Experienced, careful, never cuts corners. She got hurt anyway.</p><p>Linda has asked you to buddy her for the morning. A second set of hands and a familiar face.</p>"},
+{type:"plan",sec:0,time:"7:05 AM",who:"Mia",color:"#0E9DBD",sub:["Care aide","Week 1 modified"],
+  rows:[
+    {c:"cg",l:"Cleared for",t:"All resident care tasks with a second person present."},
+    {c:"cr",l:"Not cleared for",t:"Solo repositioning, solo transfers, or any single person manual lift."},
+    {c:"ca",l:"Before each task",t:"Complete a pre-task risk check before every assisted task."},
+    {c:"ca",l:"Report any pain",t:"Stop and tell Linda before continuing if pain increases."},
+    {c:"cb",l:"Assigned buddy",t:"You are with Mia for the full morning shift."}
+  ],alert:""},
+{type:"beat",sec:0,time:"7:08 AM",html:"<p>Three residents need two person assists this morning: <strong>Mrs. Grace</strong> in Oak Wing 32, <strong>Mr. Kim</strong> in Cedar Wing 14, and <strong>Mrs. Park</strong> in Cedar Wing 19.</p><p>You read each handling plan before you enter the room.</p>"},
+{type:"learn",sec:0,time:"7:10 AM",title:"What an MSI is, and why it matters",
+  intro:"A musculoskeletal injury, or MSI, is damage to muscles, tendons, ligaments, joints or nerves caused by work. In residential care the most common are low back strains, shoulder injuries, and neck strain from repeated or awkward movement.",
+  bullets:["MSIs are the leading cause of lost time injuries among BC care workers.","Manual resident handling is the highest risk activity in residential care.","Risk is not only about weight. Posture, angles, repetition and environment all matter.","Most MSIs are preventable with the right assessment, equipment and technique."],
+  hl:"WorkSafeBC and SafeCare BC identify safe handling as the single most effective intervention."},
+{type:"learn",sec:0,time:"7:13 AM",title:"The pre-task risk check",
+  intro:"Before every assisted task you run a quick four part check. It takes seconds, and it is what those two minutes are really made of.",
+  bullets:["The resident: their condition and mobility today, which can change from shift to shift.","The environment: is the room set up and the equipment ready and within reach?","The task: is this the right time, and do we have what we need to do it safely?","Yourself: am I physically ready to do this safely right now?"],
+  hl:"You run these every assisted task, before you enter the room."},
+{type:"order",sec:0,time:"7:14 AM",title:"Pre-task risk check",
+  q:"Put the four steps of the pre-task risk check in the right order. Tap the arrows to move each step.",
+  items:[
+    {t:"Check the environment: is the room set up and equipment ready?",correct:2},
+    {t:"Check yourself: am I ready to do this task safely right now?",correct:4},
+    {t:"Check the task: is this the right time and do we have what we need?",correct:3},
+    {t:"Check the resident: what is their condition and mobility today?",correct:1}
+  ],
+  fb:"In order: the resident first, then the environment, then the task, then yourself. You read the person before the room, and the room before the move."},
+
+{type:"section",sec:1,cta:"Head to the Oak Wing",time:"8:10 AM",num:"02",name:"Section two",title:"The ceiling lift",sub:"Oak Wing · Room 32"},
+{type:"plan",sec:1,time:"8:10 AM",who:"Mrs. Grace",color:"#7C3AED",sub:["Room 32","Oak Wing","New admission"],
+  rows:[
+    {c:"cb",l:"Resident",t:"82 years old. Hip replacement yesterday, from acute care."},
+    {c:"cr",l:"Weight bearing",t:"Non weight bearing on the left side until further notice."},
+    {c:"cg",l:"Equipment",t:"Ceiling track lift with full sling. Both in Room 32."},
+    {c:"cr",l:"Staffing",t:"Two person assist required for all transfers and repositioning."},
+    {c:"ca",l:"Communication",t:"Speaks English, may need information repeated. Surgery under 72 hours ago."}
+  ],alert:"Confirm sling fit before every transfer. Do not proceed without checking."},
+{type:"hotspot",sec:1,time:"8:14 AM",ratio:"3/4",img:"https://picsum.photos/seed/sr-room32-scan/900/1200",
+  title:"Scan the room",
+  q:"Before you fit Mrs. Grace's sling, three things in this room need attention. Tap each one you spot.",
+  spots:[
+    {x:34,y:34,label:"The sling is lying unfitted. It must be fitted and checked before any lift."},
+    {x:72,y:50,label:"A walker is leaning where it could fall or block the transfer. Move it clear first."},
+    {x:48,y:74,label:"The bedside table is in the path of the lift. It needs to move before you begin."}
+  ],
+  done:"Good scan. An unfitted sling, a walker in the way, and a table to move. You clear the space first. Mia also flags that Mrs. Grace is sore on her left, the surgical side, so you agree to recheck the care plan before fitting the sling."},
+{type:"checkbio",sec:1,time:"8:16 AM",who:"Mrs. Grace",color:"#7C3AED",
+  q:"You read Mrs. Grace's plan before entering. From what you read, what matters most as you set up this transfer?",
+  opts:[
+    {k:"A",t:"She is non weight bearing on the left, the surgical side, so protect it and confirm the sling does not load it."},
+    {k:"B",t:"She speaks English, so nothing will need to be repeated."},
+    {k:"C",t:"She is 82, so move quickly so she does not tire."},
+    {k:"D",t:"Her surgery was yesterday, so she can take some weight on the left now."}
+  ],correct:"A",
+  bioWho:"Mrs. Grace · Room 32",
+  bioRows:[
+    {c:"cb",l:"Resident",t:"82 years old. Hip replacement yesterday, from acute care."},
+    {c:"cr",l:"Weight bearing",t:"Non weight bearing on the left side until further notice."},
+    {c:"cg",l:"Equipment",t:"Ceiling track lift with full sling. Both in Room 32."},
+    {c:"cr",l:"Staffing",t:"Two person assist required for all transfers and repositioning."},
+    {c:"ca",l:"Communication",t:"Speaks English, may need information repeated. Surgery under 72 hours ago."}
+  ],
+  linda:"Reading the plan is not a formality. The left side is the surgical side and non weight bearing. Everything you do in this transfer is built around protecting it."},
+{type:"truefalse",sec:1,time:"8:20 AM",title:"Ceiling lift safety",q:"Tap true or false for each statement.",
+  cards:[
+    {text:"You should check the sling fit before raising the resident.",correct:true,fb:"Correct. The sling must be checked before raising. Once the resident is lifted, adjustments are dangerous."},
+    {text:"Both workers should agree on a verbal signal before the lift begins.",correct:true,fb:"Correct. A shared verbal cue reduces surprise and keeps both workers coordinated."},
+    {text:"It is fine to use a ceiling lift with one worker if the resident is cooperative.",correct:false,fb:"False. No matter how cooperative the resident is, the handling plan sets the minimum staffing requirement."},
+    {text:"If a resident reports pain during a lift, you stop and lower them immediately.",correct:true,fb:"Correct. Pain during a lift is a stop signal. Lower the resident safely and immediately."}
+  ],
+  linda:"Every one of those statements comes from a real situation where a worker made a different call. The lift is not dangerous on its own. The decisions around it are what matter."},
+{type:"confirm",sec:1,time:"8:24 AM",title:"Confirm the sling fit",q:"Before you raise Mrs. Grace, run the sling check. Tap only the points that are part of a sling check. Some of these are not.",
+  items:[
+    {t:"Straps seated evenly on both shoulders and thighs"},
+    {t:"No fabric twisted, folded, or bunched under her"},
+    {t:"Confirm her lunch order for later",bad:true,note:"Not part of a sling check. It does not belong in this safety step."},
+    {t:"All clips fully engaged and locked"},
+    {t:"Check the television remote is within reach",bad:true,note:"Comfort matters, but it is not a sling check. Do not let it crowd the safety step."}
+  ],
+  done:"Sling fit confirmed. Now you raise her, slowly and together."},
+{type:"beat",sec:1,time:"8:40 AM",img:"https://picsum.photos/seed/sr-grace-transfer/900/1100",ratio:"4/3",html:"<p><em>You and Mia confirm the sling fit and explain each step to Mrs. Grace before doing it. The transfer takes eleven minutes and goes smoothly. She is seated in the chair by the window, a pillow supporting her left side.</em></p>"},
+{type:"callout",sec:1,time:"8:42 AM",who:"Mrs. Grace",role:"Resident, Room 32",color:"#7C3AED",ratio:"4/5",img:"https://picsum.photos/seed/sr-grace-seated/900/1125",text:"That was much gentler than I expected."},
+
+{type:"section",sec:2,cta:"Over to Cedar Wing",time:"9:00 AM",num:"03",name:"Section three",title:"Body mechanics and the no-lift rule",sub:"Cedar Wing · Room 14"},
+{type:"plan",sec:2,time:"9:00 AM",who:"Mr. Kim",color:"#0891B2",sub:["Room 14","Cedar Wing"],
+  rows:[
+    {c:"cb",l:"Mobility",t:"Partially assisted. Can partially self reposition when awake."},
+    {c:"cg",l:"Equipment",t:"Slide sheet and repositioning belt. No ceiling lift if he can partially assist."},
+    {c:"cr",l:"Staffing",t:"Two person assist required for all bed repositioning."},
+    {c:"ca",l:"Bed setup",t:"Adjust to working height at hip level before every task."},
+    {c:"ca",l:"Rail",t:"Lower the rail on your working side before touching the slide sheet or resident."}
+  ],alert:"Do not reposition with the bed at its lowest setting. This is the condition that causes lower back MSI."},
+{type:"beat",sec:2,time:"9:04 AM",img:"https://picsum.photos/seed/sr-room14-hall/900/1100",ratio:"4/3",html:"<p><em>Outside Room 14, Mia pauses and puts one hand on the wall. A twinge. She straightens, exhales, and keeps moving. She tells you what happened to her, almost exactly this task. Bed too low. Rail up on her side. She leaned over instead of adjusting first. One second.</em></p>"},
+{type:"mcq",sec:2,time:"9:05 AM",q:"Mia just described how she hurt her back on a task almost exactly like this one. From what she said, what did she do wrong?",
+  opts:[
+    {k:"A",t:"She lifted a resident who was too heavy for one person."},
+    {k:"B",t:"The bed was too low and the rail was up on her side, and she leaned over instead of adjusting both first."},
+    {k:"C",t:"She did not ask the resident to help shift themselves."},
+    {k:"D",t:"She moved too quickly and lost her balance."}
+  ],correct:"B",
+  linda:"That is it. It was not strength or weight. It was the setup. Bed too low, rail up, leaning across. Two minutes of setup would have saved six weeks of physio.",
+  wrong:{A:"Weight was not the issue. The mechanics of the position were.",C:"Resident participation helps, but the bed height and rail are what put her back at risk.",D:"Speed was part of it, but the specific cause was reaching over a raised rail with the bed too low."}},
+{type:"learn",sec:2,time:"9:08 AM",title:"Body mechanics in repositioning",
+  intro:"The most common cause of MSI during repositioning is awkward body posture, not excessive weight.",
+  bullets:["Reaching across or over a raised bed rail puts the lower back in a mechanically vulnerable position.","A bed at the wrong height forces you to bend, twist, or reach, and all of these multiply spinal load.","Before repositioning: adjust the bed to hip height, lower the rail on your working side, keep the load close, and keep your spine neutral throughout."],
+  hl:"The two minutes you take to set up correctly are not a delay. They are the task."},
+{type:"mcq",sec:2,time:"9:12 AM",q:"You are about to reposition Mr. Kim. The bed is at its lowest setting, rails up on both sides. What do you do first?",
+  opts:[
+    {k:"A",t:"Proceed carefully. You have done this at low height before and it is faster."},
+    {k:"B",t:"Adjust the bed to working height and lower the rail on your working side before touching the slide sheet or the resident."},
+    {k:"C",t:"Ask Mr. Kim to help shift himself up the bed first, so the effort is smaller."},
+    {k:"D",t:"Position the slide sheet first, then adjust the bed, so you do not disturb the sheet."}
+  ],correct:"B",
+  linda:"Exactly right. The bed height and rail position are not small details you sort out mid task. They are what keep your back safe. You adjust first, every single time.",
+  wrong:{A:"That is the exact decision that injured Mia six weeks ago. Familiarity does not protect you from the mechanics of an awkward position.",C:"Encouraging resident participation is a good instinct, but asking him to move before the environment is set up does not remove your risk.",D:"Bed height first. Then the sheet. Then the task."}},
+{type:"hold",sec:2,time:"9:13 AM",intro:"Take the two minutes",sub:"This is the moment Mia skipped. Press and hold to raise the bed to hip height and lower the rail before you touch the slide sheet. If you let go early, you are rushing.",done:"Bed at working height. Rail down. Now you reposition, safely.",fail:"You let go early. Setting up halfway is the same risk as not setting up. Rushing is exactly what got Mia hurt. Hold it the whole way."},
+{type:"beat",sec:2,time:"9:30 AM",img:"https://picsum.photos/seed/cedarlounge/1100/900",ratio:"4/3",html:"<p><em>In the lounge, Tom sits with you and Mia. He says that earlier another aide told him they could skip the stand aid for a transfer. The resident was small and cooperative. Tom went along with it. The handling plan said two person assist with the stand aid.</em></p>"},
+{type:"callout",sec:2,time:"9:32 AM",who:"Linda",role:"Charge nurse",color:"#0475AC",ratio:"3/4",img:"https://picsum.photos/seed/sr-linda-standard/900/1200",text:"Weight and cooperation are not the standard. The handling plan is the standard."},
+{type:"learn",sec:2,time:"9:34 AM",title:"The no-lift policy",
+  intro:"A no-lift policy means manual lifting of residents is eliminated as a normal work practice.",
+  bullets:["Mechanical equipment is used for every transfer where the resident cannot fully bear their own weight.","Common reasons people deviate: the resident seems light enough, the equipment feels slower, a senior worker leads and a junior feels unable to object, or time pressure.","None of these change the rule. Deviating from the handling plan without a documented reassessment is a safety violation."],
+  hl:"The handling plan is the standard. Not your judgment in the moment."},
+{type:"multi",sec:2,time:"9:38 AM",q:"Tom asks: next time that happens, what should I do? Select all that apply.",
+  opts:[
+    {k:"A",t:"Say: I am not comfortable doing this without the equipment. Can we get the stand aid?"},
+    {k:"B",t:"Go ahead with the manual lift but use good body mechanics to protect yourself."},
+    {k:"C",t:"Check the handling plan and refer to it in the conversation."},
+    {k:"D",t:"If the other worker proceeds without you, report it to Linda after the task."},
+    {k:"E",t:"Stay quiet this time but resolve to use the equipment yourself in future."}
+  ],correct:["A","C","D"],
+  linda:"You have every right to name the handling plan and ask for the equipment. Referring to the written plan removes the personal dynamic. If a colleague proceeds without the equipment, that is reportable, because the next person working with that resident faces the same situation.",
+  wrong:{B:"Good body mechanics reduce risk during a properly planned task. They do not make an unsafe task safe.",E:"Staying quiet until you are senior is not a safety strategy. The resident is at risk now. You are at risk now."}},
+
+{type:"section",sec:3,cta:"Back to Room 32",time:"1:30 PM",num:"04",name:"Section four",title:"When things go wrong",sub:"Oak Wing · Room 32, afternoon"},
+{type:"beat",sec:3,time:"1:30 PM",img:"https://picsum.photos/seed/sr-room32-afternoon/900/1100",ratio:"4/3",html:"<p>You are back in Room 32 for the afternoon transfer. Mrs. Grace is suspended in the sling above the chair, being moved toward the bed. Mia is on the remote. You are guiding the sling frame, watching her face.</p><p>Then Mrs. Grace makes a sharp sound.</p>"},
+{type:"callout",sec:3,time:"1:31 PM",who:"Mrs. Grace",role:"Resident, Room 32",color:"#7C3AED",ratio:"3/4",img:"https://picsum.photos/seed/sr-grace-pain/900/1200",text:"Stop. My hip. Something is pulling.",kick:"Stop signal",urgent:true},
+{type:"decision",sec:3,time:"1:31 PM",q:"Mrs. Grace has reported pain during the lift. She is suspended above the chair. Mia has already stopped the remote. Do you lower her back to the chair immediately?",
+  yes:"Yes, lower her now",no:"No, continue to the bed",correctYes:true,goodHead:"Right call",
+  good:"Mia lowers Mrs. Grace gently back to the chair. You steady the sling frame and kneel to eye level: you are back in the chair, you are safe, can you tell me where the pain is. You press the call button and wait for Linda. Pain during a lift is a stop signal, full stop.",
+  badHead:"This caused harm",
+  bad:"You decide to continue, thinking she will be more comfortable in the bed. As she is lowered onto the bed she cries out again. Her face is pale.",
+  badLinda:"She told you she was in pain. Continuing a transfer when a resident reports pain risks worsening an injury you cannot undo. Stopping is always more important than getting her somewhere comfortable.",
+  fin:"Lower the resident immediately. Steady the sling. Kneel to eye level and reassure her. Then press the call button."},
+{type:"beat",sec:3,time:"1:50 PM",img:"https://picsum.photos/seed/sr-linda-review/900/1100",ratio:"4/3",html:"<p>Linda reviews the sling positioning with you afterward. It had shifted slightly during the morning transfer, putting pressure on the surgical side during the second lift.</p>"},
+{type:"callout",sec:3,time:"1:52 PM",who:"Linda",role:"Charge nurse",color:"#0475AC",ratio:"3/4",img:"https://picsum.photos/seed/sr-linda-checktime/900/1200",text:"This is why we check the sling fit every time. Not just the first time.",focus:true,kick:"Remember this"},
+{type:"plan",sec:3,time:"2:10 PM",who:"Mrs. Park",color:"#B45309",sub:["Room 19","Cedar Wing"],
+  rows:[
+    {c:"cb",l:"Age",t:"84 years old."},
+    {c:"ca",l:"Cognition",t:"Moderate dementia. May not accurately report her own condition."},
+    {c:"cg",l:"Equipment",t:"Transfer belt and grab rail."},
+    {c:"cb",l:"Staffing",t:"One person assist permitted if she is cooperative and steady."},
+    {c:"ca",l:"Bathroom",t:"Transfer belt and grab rail, one staff if cooperative."}
+  ],alert:"Assess stability before and after any movement. Near falls must be reported even if she says she is fine."},
+{type:"beat",sec:3,time:"2:14 PM",img:"https://picsum.photos/seed/sr-park-stand/900/1100",ratio:"4/3",html:"<p><em>Mrs. Park stands faster than expected. She reaches for the grab rail but loses her footing on the mat near the chair. She does not fall, but she grabs your arm hard and pulls you forward. You absorb it. She recovers and says she is fine.</em></p>"},
+{type:"mcq",sec:3,time:"2:15 PM",q:"Mrs. Park is stable, holding the grab rail, and says she is fine. What do you do next?",
+  opts:[
+    {k:"A",t:"Continue with the bathroom transfer. She is holding the rail and stopping now might confuse her."},
+    {k:"B",t:"Help her back to the chair, move the mat, assess how she is feeling, and decide whether to continue."},
+    {k:"C",t:"Call for Mia before doing anything else. After what just happened you do not feel confident proceeding solo."},
+    {k:"D",t:"Help her to the bathroom first since that is the immediate need, then move the mat and report the near fall."}
+  ],correct:"B",
+  linda:"The near fall changed the situation. Sit her down, remove the hazard, check in, and decide from there. That mat goes in the report. Near falls are incidents. They do not become incidents only when someone hits the floor.",
+  wrong:{A:"A resident with moderate dementia who nearly fell thirty seconds ago has an elevated fall risk. Her word is not a clinical assessment.",C:"Calling for Mia is not wrong, but get Mrs. Park back to the chair and remove the hazard she is still standing in front of first.",D:"Moving the mat after the task means leaving it in place during the transfer. Address it now."}},
+
+{type:"section",sec:4,cta:"Take a breather",time:"3:45 PM",num:"05",name:"Section five",title:"What today was really about",sub:"The break room · end of shift"},
+{type:"beat",sec:4,time:"3:45 PM",img:"https://picsum.photos/seed/sr-breakroom-talk/900/1100",ratio:"4/3",html:"<p>Later, just you and Mia in the break room. She tells you that on the morning she was hurt, she knew the conditions were not right. Short staffed, bed already low, four other residents waiting. She did it anyway. Nobody forced her. Then she spent six weeks in physio wondering why she had not just taken those two minutes.</p>"},
+{type:"callout",sec:4,time:"3:47 PM",who:"Mia",role:"Care aide",color:"#0E9DBD",ratio:"3/4",img:"https://picsum.photos/seed/sr-mia-breakroom/900/1200",text:"I cannot control short staffing. I can control whether I take those two minutes.",focus:true,kick:"Remember this"},
+{type:"learn",sec:4,time:"3:50 PM",title:"The four risk factors for MSI",
+  intro:"WorkSafeBC OHS Regulation Part 4 requires employers to identify and control MSI risk factors. Workers have the right to that assessment.",
+  bullets:["Force: the physical effort required, including weight and any unexpected resistance.","Awkward posture: working bent, twisted, or reaching rather than upright and neutral.","Repetition: the same movements across a shift, compounding strain even when each task feels manageable.","Local mechanical contact: sustained pressure on a body part from a surface, edge, or grip."],
+  hl:"These four interact. Low force in good posture becomes high risk when you are fatigued, rushed, and on your twelfth task of the shift."},
+{type:"tapreveal",sec:4,time:"3:54 PM",title:"The four conditions that morning",q:"Tap each card to see the risk factor and what could have been done differently. Open all four to continue.",
+  items:[
+    {n:1,ttl:"Short staffed shift",rf:"Repetition and fatigue",df:"Report workload concerns to Linda before pushing through."},
+    {n:2,ttl:"Bed at lowest setting",rf:"Awkward posture",df:"Always adjust the bed to hip height before a repositioning task."},
+    {n:3,ttl:"Rushing, four residents waiting",rf:"Time pressure driving unsafe decisions",df:"Preparation steps are the task. Skipping them does not make you faster."},
+    {n:4,ttl:"Reaching over the raised rail",rf:"Mechanical contact and awkward posture",df:"Lower the rail on your working side before reaching across the resident."}
+  ]},
+{type:"recap",sec:4,time:"3:58 PM",title:"What you did today",
+  items:[
+    "You ran a pre-task risk check before entering Mrs. Grace's room: resident, environment, task, yourself.",
+    "You confirmed what is true and false about ceiling lift use before the transfer.",
+    "You set the bed to working height and lowered the rail before Mr. Kim's repositioning.",
+    "You helped Tom understand when and how to name the handling plan.",
+    "You stopped the transfer when Mrs. Grace reported pain, lowered her safely, and called for help.",
+    "You seated Mrs. Park, removed the mat hazard, and assessed before continuing."
+  ]},
+{type:"complete",sec:4,time:"4:00 PM"}
+];
+
+/* ---------- ENGINE ---------- */
+var stage=document.getElementById('stage');
+var fwd=document.getElementById('fwd');
+var back=document.getElementById('back');
+var tapcue=document.getElementById('tapcue');
+var clockEl=document.getElementById('clock');
+var clockT=document.getElementById('clock-t');
+var secLabel=document.getElementById('sec-label');
+var ticksEl=document.getElementById('ticks');
+var drawer=document.getElementById('drawer');
+var drawerList=document.getElementById('drawer-list');
+var navBar=document.getElementById('nav');
+
+var cur=0,done={},reached={0:true};
+var secCards={};CARDS.forEach(function(c,i){(secCards[c.sec]=secCards[c.sec]||[]).push(i);});
+var firstOfSec={};for(var s=0;s<SECTIONS.length;s++){firstOfSec[s]=secCards[s][0];}
+var GATED={opener:1,order:1,mcq:1,multi:1,truefalse:1,confirm:1,decision:1,tapreveal:1,hold:1,plan:1,recap:1,hotspot:1,checkbio:1};
+var ADVANCE={cover:1,section:1,beat:1,quote:1,learn:1,recap:1,callout:1};
+var CUE={beat:1,quote:1,learn:1,callout:1};
+var CHEV='<span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></span>';
+
+function save(){try{localStorage.setItem('sr-msi-c2b',JSON.stringify({cur:cur,done:Object.keys(done),reached:Object.keys(reached)}));}catch(e){}}
+function load(){try{var d=JSON.parse(localStorage.getItem('sr-msi-c2b'));if(d){d.done.forEach(function(k){done[k]=true;});d.reached.forEach(function(k){reached[k]=true;});return d.cur;}}catch(e){}return null;}
+
+function buildTicks(){ticksEl.innerHTML='';for(var i=0;i<SECTIONS.length;i++){ticksEl.innerHTML+='<div class="t" data-s="'+i+'"><i></i></div>';}}
+function paintTicks(){var card=CARDS[cur];document.querySelectorAll('#ticks .t').forEach(function(t){var si=+t.dataset.s,bar=t.querySelector('i');if(si<card.sec)bar.style.width='100%';else if(si>card.sec)bar.style.width='0%';else{var list=secCards[si];bar.style.width=Math.round(((list.indexOf(cur)+1)/list.length)*100)+'%';}});}
+
+function confetti(){var box=document.getElementById('confetti');var cols=['#0E9DBD','#0475AC','#16A34A','#D97706'];for(var i=0;i<26;i++){var d=document.createElement('div');d.className='cf';d.style.left=(15+Math.random()*70)+'%';d.style.top='28%';d.style.background=cols[i%4];d.style.animationDelay=(Math.random()*.2)+'s';box.appendChild(d);setTimeout((function(el){return function(){el.remove();};})(d),1300);}}
+function vibe(p){if(navigator.vibrate)navigator.vibrate(p);}
+
+function setNav(){
+  var card=CARDS[cur];
+  if(card.type==='cover'){navBar.style.display='none';return;}
+  navBar.style.display='flex';
+  back.classList.toggle('hide',cur===0);
+  if(card.type==='complete'){fwd.style.display='none';tapcue.classList.remove('show');return;}
+  fwd.style.display='flex';
+  var locked=GATED[card.type]&&!done[cur];
+  if(locked){fwd.className='icon locked';fwd.innerHTML=CHEV;}
+  else if(card.cta){fwd.className='';fwd.innerHTML=card.cta+CHEV;}
+  else{fwd.className='icon';fwd.innerHTML=CHEV;}
+  var showCue=CUE[card.type]&&!locked;
+  tapcue.classList.toggle('show',!!showCue);
+}
+function markDone(){if(!done[cur]){done[cur]=true;setNav();save();}}
+
+function render(){
+  var card=CARDS[cur];reached[card.sec]=true;
+  var old=stage.firstElementChild;
+  if(old){old.classList.add('out');setTimeout(function(){old.remove();},210);}
+  var el=document.createElement('div');el.className='card';el.style.animationDelay=old?'.16s':'0s';
+  el.innerHTML=renderHTML(card);
+  setTimeout(function(){stage.appendChild(el);wire(card,el);stage.scrollTop=0;},old?170:0);
+  if(SHOW_CLOCK){clockEl.style.display='inline-flex';clockT.textContent=card.time;}
+  secLabel.textContent=card.type==='cover'?'Getting started':SECTIONS[card.sec];
+  paintTicks();setNav();save();
+  if(card.type==='complete')SCORM.done();
+}
+
+/* ---------- RENDER ---------- */
+function renderHTML(c){
+  switch(c.type){
+  case 'cover':return '<div class="cover" style="padding:18px 0 0"><img class="scene-img" src="https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Sunridge%20Care-msi.png" onerror="this.onerror=null;this.src=\'https://picsum.photos/seed/sunrisecare/1200/750\'" alt=""><div class="eyebrow">Sunrise Ridge · Course 2</div><h2>Safe Handling and MSI Prevention</h2><p>Musculoskeletal injuries are the leading cause of lost time in BC residential care. They do not happen only to workers who rush. They happen to careful people when the conditions are wrong: a bed left too low, a rail left up, two minutes that felt impossible to spare.</p><p style="margin-top:14px">This is one morning shift with Mia. Five short sections. By the end you will know how to protect yourself and the people in your care, one moment at a time.</p><div class="cover-cta"><button onclick="advance()">Step into the morning '+CHEV+'</button></div></div>';
+  case 'opener':return openerHTML(c);
+  case 'section':return '<div style="padding-top:6px"><img class="scene-img" style="aspect-ratio:16/9;margin-bottom:8px" src="'+SECIMG[c.sec]+'" onerror="this.onerror=null;this.src=\''+imgFallback(c.sec)+'\'" alt=""><div class="sectioncard"><div class="num">'+c.num+'</div><div class="nm">'+c.name+'</div><h2>'+c.title+'</h2><div class="t">'+c.sub+'</div></div></div>';
+  case 'beat':return '<div class="beat">'+(c.img?'<img class="scene-img" style="aspect-ratio:'+(c.ratio||'16/10')+'" src="'+c.img+'" onerror="this.style.display=\'none\'" alt="">':'')+c.html+'</div>';
+  case 'callout':return calloutHTML(c);
+  case 'hotspot':return hotspotHTML(c);
+  case 'checkbio':return checkbioHTML(c);
+  case 'quote':return '<div class="quote"><span class="qm">&ldquo;</span><div class="qt">'+c.qt+'</div><div class="by">'+av(c.who,c.color)+'<div><div class="nm">'+c.who+'</div><div class="rl">'+c.role+'</div></div></div></div>';
+  case 'plan':return planHTML(c);
+  case 'learn':return learnHTML(c);
+  case 'order':return orderHTML(c);
+  case 'mcq':return choiceHTML(c,false);
+  case 'multi':return choiceHTML(c,true);
+  case 'truefalse':return tfHTML(c);
+  case 'confirm':return confirmHTML(c);
+  case 'decision':return decisionHTML(c);
+  case 'tapreveal':return tapHTML(c);
+  case 'hold':return holdHTML(c);
+  case 'recap':return recapHTML(c);
+  case 'complete':return '<div class="done-wrap"><div class="done-ring">✓</div><h2>Those two minutes can save your life.</h2><p>Mia&rsquo;s injury did not happen because she did not know the rules. It happened because one shift made it easy to skip one step. The step that mattered. You did not skip it today. That two minutes is not a delay. It is what keeps you working, and keeps the people in your care safe.</p><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button class="replay" onclick="restart()">Replay the shift</button><button class="endbtn" onclick="endCourse()">End the course</button></div></div>';
+  }
+  return '';
+}
+
+function openerHTML(c){
+  return '<div class="opener" style="padding:12px 0"><div class="kick">'+c.kick+'</div><h2>'+c.q+'</h2><div class="scn">'+c.scn+'</div>'+
+  '<div class="op-choice" id="op-choice"><button class="op-btn" data-pick="a"><span class="ei">'+c.a.ei+'</span><span>'+c.a.t+'</span></button><button class="op-btn" data-pick="b"><span class="ei">'+c.b.ei+'</span><span>'+c.b.t+'</span></button></div>'+
+  '<div class="op-reveal" id="op-reveal"><span class="tag" id="op-tag"></span><div id="op-text"></div></div></div>';
+}
+function planHTML(c){
+  var rows='';c.rows.forEach(function(r){rows+='<div class="prow"><div class="pi '+r.c+'">&#9679;</div><div><div class="pl '+r.c+'">'+r.l+'</div><div class="pt">'+r.t+'</div></div></div>';});
+  var tags=c.sub.map(function(s){return '<span class="pill">'+s+'</span>';}).join('');
+  var front='<div class="flip-face flip-front"><div class="pfimg"><div class="pf-fallback" style="background:'+c.color+'">'+initialOf(c.who)+'</div><img src="'+portraitOf(c.who)+'" onerror="this.style.display=\'none\'" alt=""><div class="pfshade"></div></div><div class="pfinfo"><div class="fname">'+c.who+'</div><div class="ftags">'+tags+'</div><span class="prompt"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2-9.5L1 10"/></svg> Tap to open the handling plan</span></div></div>';
+  return '<div class="flip" id="flip" onclick="flipPlan()"><div class="flip-in">'+front+
+    '<div class="flip-face flip-back"><div class="bh"><span class="bn">'+c.who+'</span><span class="bf"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2-9.5L1 10"/></svg> tap to flip back</span></div><div class="bb">'+rows+(c.alert?'<div class="palert">'+c.alert+'</div>':'')+'</div></div>'+
+    '</div></div>';
+}
+function learnHTML(c){
+  var lis=c.bullets.map(function(b){var m=b.indexOf(':');if(m>0&&m<42){b='<strong>'+b.slice(0,m)+'</strong>'+b.slice(m);}return '<li><div class="lb-txt">'+b+'</div></li>';}).join('');
+  return '<div style="padding:12px 0"><div class="learn"><div class="hd"><h3>'+c.title+'</h3></div><div class="bd"><p>'+c.intro+'</p><ul>'+lis+'</ul><div class="hl">'+c.hl+'</div></div></div></div>';
+}
+function orderHTML(c){
+  var items=c.items.map(function(it){return '<div class="oitem" data-correct="'+it.correct+'"><div class="ot">'+it.t+'</div><div class="obtns"><button class="ob up">&#9650;</button><button class="ob dn">&#9660;</button></div></div>';}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Activity · Order the steps</div><h3>'+c.title+'</h3><p class="q">'+c.q+'</p><div id="ord-list">'+items+'</div><button class="subbtn" id="ord-sub">Check order</button><div class="fb" id="ord-fb"></div></div></div>';
+}
+function choiceHTML(c,multi){
+  var opts=c.opts.map(function(o){return '<div class="opt" data-k="'+o.k+'"><div class="lt">'+o.k+'</div><div class="ox">'+o.t+'</div></div>';}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Activity · '+(multi?'Select all that apply':'Choose one')+'</div><p class="q">'+c.q+'</p><div id="ch-opts">'+opts+'</div><button class="subbtn" id="ch-sub" disabled>Submit</button><div class="fb" id="ch-fb"></div></div></div>';
+}
+function tfHTML(c){
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Activity · True or false</div><h3>'+c.title+'</h3><p class="q" style="margin-bottom:10px">'+c.q+'</p><div class="tf-pb"><div class="tf-pf" id="tf-pf"></div></div><div class="tf-ct" id="tf-ct"></div><div class="tf-card"><div class="tf-txt" id="tf-txt"></div></div><div class="tf-btns"><button class="tf-btn tf-t" id="tf-true">&#10003; True</button><button class="tf-btn tf-f" id="tf-false">&#10007; False</button></div><div class="tf-fb" id="tf-fb"></div><button class="tf-nx" id="tf-nx">Next statement</button><div id="tf-end" style="display:none"><div class="tf-linda-box"><div class="lcw">Linda · Charge nurse</div><div class="lct">'+c.linda+'</div></div></div></div></div>';
+}
+function confirmHTML(c){
+  var items=c.items.map(function(it,i){var t=(typeof it==='string')?it:it.t;var bad=(typeof it==='object'&&it.bad)?1:0;var note=(typeof it==='object'&&it.note)?it.note:'';return '<div class="ck" data-i="'+i+'" data-bad="'+bad+'"><div class="box">&#10003;</div><div class="ckt">'+t+'</div></div>'+(bad?'<div class="ck-note" data-i="'+i+'">'+note+'</div>':'');}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag" style="background:var(--teal)">Confirm each point</div><h3>'+c.title+'</h3><p class="q">'+c.q+'</p><div id="ck-list">'+items+'</div><div class="ck-done" id="ck-done">'+c.done+'</div></div></div>';
+}
+function calloutHTML(c){
+  var kick=c.kick?'<div class="co-kick"'+(c.urgent?' style="background:var(--red)"':'')+'>'+c.kick+'</div>':'';
+  return '<div class="callout'+(c.focus?' focus':'')+'" style="aspect-ratio:'+(c.ratio||'4/5')+'">'+kick+'<img class="coimg" src="'+c.img+'" onerror="this.style.display=\'none\'" alt=""><div class="coshade"></div><div class="cobubble"><div class="cot">&ldquo;'+c.text+'&rdquo;</div></div></div>';
+}
+function hotspotHTML(c){
+  var spots=c.spots.map(function(s,i){return '<button class="spot" data-i="'+i+'" style="left:'+s.x+'%;top:'+s.y+'%">+</button>';}).join('');
+  var dots=c.spots.map(function(){return '<span class="dot"></span>';}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Activity · Find the hazards</div><h3>'+c.title+'</h3><p class="q">'+c.q+'</p><div class="hs-wrap" style="aspect-ratio:'+(c.ratio||'3/4')+'"><img src="'+c.img+'" onerror="this.style.display=\'none\'" alt=""><div class="hs-veil"></div>'+spots+'<div class="hs-modal" id="hs-modal"><div class="hs-modal-card"><button class="hx" id="hs-x">×</button><div class="htx" id="hs-mtx"></div></div></div></div><div class="hs-count" id="hs-count"><span>Found <b id="hs-n">0</b> of '+c.spots.length+'</span>'+dots+'</div><div class="hs-done" id="hs-done">'+c.done+'</div></div></div>';
+}
+function checkbioHTML(c){
+  var opts=c.opts.map(function(o){return '<div class="opt" data-k="'+o.k+'"><div class="lt">'+o.k+'</div><div class="ox">'+o.t+'</div></div>';}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag" style="background:var(--teal)">Did you read the plan?</div><p class="q">'+c.q+'</p><button class="biobtn" id="bio-open"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> View '+c.who+'&rsquo;s plan</button><div id="ch-opts">'+opts+'</div><button class="subbtn" id="ch-sub" disabled>Submit</button><div class="fb" id="ch-fb"></div></div></div>';
+}
+function decisionHTML(c){
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Decision</div><p class="q">'+c.q+'</p><div class="dc-opts"><button class="dc-btn dc-y" id="dc-y">'+c.yes+'</button><button class="dc-btn dc-n" id="dc-n">'+c.no+'</button></div><div class="fb" id="dc-fb"></div></div></div>';
+}
+function tapHTML(c){
+  var items=c.items.map(function(it){return '<div class="tr" data-n="'+it.n+'"><div class="th"><div class="tn">'+it.n+'</div><div class="ttl">'+it.ttl+'</div><span class="tchev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="tb"><div class="tb-in"><div class="rf">Risk factor</div><div class="rv">'+it.rf+'</div><div class="df">What to do instead</div><div class="rv" style="margin-bottom:0">'+it.df+'</div></div></div></div>';}).join('');
+  return '<div style="padding:8px 0"><div class="act"><div class="tag">Activity · Tap to reveal</div><h3>'+c.title+'</h3><p class="q">'+c.q+'</p><div id="tap-list">'+items+'</div><div id="tap-done" style="display:none;margin-top:6px;font-size:14px;font-weight:600;color:var(--green)">All four conditions identified. These are the factors WorkSafeBC requires employers to assess and control.</div></div></div>';
+}
+function holdHTML(c){
+  return '<div style="padding:8px 0"><div class="act" style="border-style:dashed;border-color:var(--teal)"><div class="tag" style="background:var(--teal)">Take the time</div><div class="hold"><div class="hi">'+c.intro+'</div><div class="hs">'+c.sub+'</div><button class="holdbtn" id="holdbtn"><svg viewBox="0 0 148 148"><circle class="tk" cx="74" cy="74" r="68"/><circle class="pr" id="holdpr" cx="74" cy="74" r="68"/></svg><span class="fc"><span class="ic">&#9201;</span><span class="lb">hold</span></span></button><div class="hl2" id="hold-lb">Press and hold</div></div></div></div>';
+}
+function recapHTML(c){
+  var items=c.items.map(function(t,i){return '<div class="recap-item" data-i="'+i+'"><div class="rn">'+(i+1)+'</div><p>'+t+'</p></div>';}).join('');
+  return '<div style="padding:8px 0"><div class="eyebrow" style="color:var(--primary)">'+c.title+'</div><div id="recap-list">'+items+'</div></div>';
+}
+
+/* ---------- WIRE ---------- */
+function wire(c,el){
+  if(c.type==='opener')wireOpener(c,el);
+  if(c.type==='order')wireOrder(c,el);
+  if(c.type==='mcq')wireChoice(c,el,false);
+  if(c.type==='multi')wireChoice(c,el,true);
+  if(c.type==='truefalse')wireTF(c,el);
+  if(c.type==='confirm')wireConfirm(c,el);
+  if(c.type==='decision')wireDecision(c,el);
+  if(c.type==='tapreveal')wireTap(c,el);
+  if(c.type==='hold')wireHold(c,el);
+  if(c.type==='recap')wireRecap(c,el);
+  if(c.type==='hotspot')wireHotspot(c,el);
+  if(c.type==='checkbio')wireCheckbio(c,el);
+}
+
+function flipPlan(){var f=document.getElementById('flip');if(!f)return;f.classList.toggle('open');if(f.classList.contains('open'))markDone();}
+
+function wireOpener(c,el){
+  var btns=el.querySelectorAll('.op-btn');var rev=el.querySelector('#op-reveal');var tag=el.querySelector('#op-tag');var tx=el.querySelector('#op-text');
+  btns.forEach(function(b){b.onclick=function(){
+    btns.forEach(function(x){x.classList.remove('pick');x.disabled=true;});b.classList.add('pick');
+    var pick=b.dataset.pick;tag.textContent=pick==='a'?'The shortcut':'The two minutes';tx.textContent=pick==='a'?c.revealA:c.revealB;
+    rev.classList.add('show');vibe(10);markDone();
+  };});
+}
+function wireOrder(c,el){
+  var list=el.querySelector('#ord-list');var attempts=0;
+  list.querySelectorAll('.up').forEach(function(b){b.onclick=function(e){e.stopPropagation();var it=b.closest('.oitem');var p=it.previousElementSibling;if(p)list.insertBefore(it,p);};});
+  list.querySelectorAll('.dn').forEach(function(b){b.onclick=function(e){e.stopPropagation();var it=b.closest('.oitem');var n=it.nextElementSibling;if(n)list.insertBefore(n,it);};});
+  el.querySelector('#ord-sub').onclick=function(){
+    attempts++;var items=list.querySelectorAll('.oitem');var ok=true;
+    items.forEach(function(it,i){if(+it.dataset.correct!==i+1){ok=false;}});
+    var fb=el.querySelector('#ord-fb');
+    if(ok){items.forEach(function(it){it.classList.add('ok');it.classList.remove('no');});this.disabled=true;this.textContent='Correct order';this.style.background='var(--green)';fb.className='fb good show';fb.innerHTML='<div class="fh">&#10003; Correct</div><div class="fbody"><div class="ft">'+c.fb+'</div></div>';confetti();markDone();return;}
+    if(attempts<2){items.forEach(function(it,i){it.classList.toggle('no',+it.dataset.correct!==i+1);});fb.className='fb bad show';fb.innerHTML='<div class="fh">Not quite</div><div class="fbody"><div class="ft">Some steps are out of place. You have one more try, then I will show you the order.</div></div>';return;}
+    var arr=[].slice.call(items).sort(function(a,b){return (+a.dataset.correct)-(+b.dataset.correct);});arr.forEach(function(it){it.classList.remove('no');it.classList.add('ok');list.appendChild(it);});
+    this.disabled=true;this.textContent='Here is the correct order';this.style.background='var(--green)';
+    fb.className='fb good show';fb.innerHTML='<div class="fh">The correct order</div><div class="fbody"><div class="ft">'+c.fb+'</div></div>';markDone();
+  };
+}
+function wireChoice(c,el,multi){
+  var sel=[];var opts=el.querySelectorAll('.opt');var sub=el.querySelector('#ch-sub');
+  opts.forEach(function(o){o.onclick=function(){var k=o.dataset.k;if(multi){if(o.classList.toggle('sel'))sel.push(k);else sel=sel.filter(function(x){return x!==k;});}else{opts.forEach(function(x){x.classList.remove('sel');});o.classList.add('sel');sel=[k];}sub.disabled=sel.length===0;};});
+  sub.onclick=function(){
+    opts.forEach(function(o){o.classList.add('dis');});var fb=el.querySelector('#ch-fb');var correct=multi?c.correct:[c.correct];var allRight=true;
+    opts.forEach(function(o){var k=o.dataset.k;var isC=correct.indexOf(k)>=0;var picked=sel.indexOf(k)>=0;if(isC){o.classList.add('ok');if(!picked)allRight=false;}if(picked&&!isC){o.classList.add('bad');allRight=false;}});
+    var wrongNotes='';if(c.wrong){sel.forEach(function(k){if(correct.indexOf(k)<0&&c.wrong[k])wrongNotes+='<div class="ft"><strong>Option '+k+':</strong> '+c.wrong[k]+'</div>';});}
+    fb.className='fb '+(allRight?'good':'bad')+' show';fb.innerHTML='<div class="fh">'+(allRight?'&#10003; Correct':'Review your answer')+'</div><div class="fbody">'+wrongNotes+'<div class="linda">'+av('Linda',C.linda)+'<div><div class="who">Linda</div><div class="lx">'+c.linda+'</div></div></div></div>';
+    if(allRight)confetti();markDone();
+  };
+}
+function wireTF(c,el){
+  var i=0;var cards=c.cards;var txt=el.querySelector('#tf-txt'),pf=el.querySelector('#tf-pf'),ct=el.querySelector('#tf-ct'),bt=el.querySelector('#tf-true'),bf=el.querySelector('#tf-false'),fb=el.querySelector('#tf-fb'),nx=el.querySelector('#tf-nx'),cd=el.querySelector('.tf-card');
+  function show(flip){txt.textContent=cards[i].text;ct.textContent='Statement '+(i+1)+' of '+cards.length;pf.style.width=Math.round((i/cards.length)*100)+'%';fb.className='tf-fb';nx.className='tf-nx';bt.disabled=false;bf.disabled=false;if(flip){cd.classList.remove('flipping');void cd.offsetWidth;cd.classList.add('flipping');}}
+  function answer(val){bt.disabled=true;bf.disabled=true;var ok=val===cards[i].correct;fb.className='tf-fb show '+(ok?'good':'bad');fb.textContent=(ok?'\u2713 ':'')+cards[i].fb;nx.className='tf-nx show';nx.textContent=(i<cards.length-1)?'Next statement':'See result';vibe(ok?[10,30,10]:[30,30]);}
+  bt.onclick=function(){answer(true);};bf.onclick=function(){answer(false);};
+  nx.onclick=function(){i++;if(i<cards.length){show(true);}else{pf.style.width='100%';cd.style.display='none';el.querySelector('.tf-btns').style.display='none';fb.className='tf-fb';nx.className='tf-nx';ct.style.display='none';el.querySelector('#tf-end').style.display='block';confetti();markDone();}};
+  show(false);
+}
+function wireConfirm(c,el){
+  var cks=el.querySelectorAll('.ck');var doneMsg=el.querySelector('#ck-done');var good=0,need=0;
+  cks.forEach(function(ck){if(ck.dataset.bad!=='1')need++;});
+  cks.forEach(function(ck){ck.onclick=function(){
+    if(ck.dataset.bad==='1'){if(ck.classList.contains('bad'))return;ck.classList.add('bad');ck.querySelector('.box').innerHTML='&#10007;';var note=el.querySelector('.ck-note[data-i="'+ck.dataset.i+'"]');if(note)note.classList.add('show');vibe([25,25]);return;}
+    if(ck.classList.contains('on'))return;ck.classList.add('on');good++;vibe(8);if(good===need){doneMsg.classList.add('show');confetti();markDone();}
+  };});
+}
+function wireHotspot(c,el){
+  var spots=el.querySelectorAll('.spot');var dots=el.querySelectorAll('.hs-count .dot');var total=spots.length;var n=0;var nEl=el.querySelector('#hs-n');
+  var modal=el.querySelector('#hs-modal');var mtx=el.querySelector('#hs-mtx');
+  function close(){modal.classList.remove('show');}
+  el.querySelector('#hs-x').onclick=function(e){e.stopPropagation();close();};
+  modal.onclick=function(e){if(e.target===modal)close();};
+  spots.forEach(function(sp){sp.onclick=function(e){e.stopPropagation();var i=+sp.dataset.i;mtx.textContent=c.spots[i].label;modal.classList.add('show');if(sp.classList.contains('found'))return;sp.classList.add('found');sp.textContent='\u2713';if(dots[n])dots[n].classList.add('on');n++;nEl.textContent=n;vibe(8);if(n===total){el.querySelector('#hs-done').classList.add('show');confetti();markDone();}};});
+}
+function wireCheckbio(c,el){
+  var sel=null;var opts=el.querySelectorAll('.opt');var sub=el.querySelector('#ch-sub');
+  opts.forEach(function(o){o.onclick=function(){opts.forEach(function(x){x.classList.remove('sel');});o.classList.add('sel');sel=o.dataset.k;sub.disabled=false;};});
+  el.querySelector('#bio-open').onclick=function(){openBio(c.bioWho,c.bioRows);};
+  sub.onclick=function(){
+    opts.forEach(function(o){o.classList.add('dis');});var fb=el.querySelector('#ch-fb');var ok=sel===c.correct;
+    opts.forEach(function(o){if(o.dataset.k===c.correct)o.classList.add('ok');else if(o.dataset.k===sel)o.classList.add('bad');});
+    fb.className='fb '+(ok?'good':'bad')+' show';fb.innerHTML='<div class="fh">'+(ok?'&#10003; Correct':'Review your answer')+'</div><div class="fbody"><div class="linda">'+av('Linda',C.linda)+'<div><div class="who">Linda</div><div class="lx">'+c.linda+'</div></div></div></div>';
+    if(ok)confetti();markDone();
+  };
+}
+function wireDecision(c,el){
+  var y=el.querySelector('#dc-y'),n=el.querySelector('#dc-n'),fb=el.querySelector('#dc-fb');
+  function lock(){y.disabled=true;n.disabled=true;}
+  y.onclick=function(){lock();y.classList.add('sel-y');fb.className='fb good show';fb.innerHTML='<div class="fh">&#10003; '+c.goodHead+'</div><div class="fbody"><div class="ft">'+c.good+'</div></div>';confetti();markDone();};
+  n.onclick=function(){lock();n.classList.add('sel-n');fb.className='fb bad show';fb.innerHTML='<div class="fh">'+c.badHead+'</div><div class="fbody"><div class="ft">'+c.bad+'</div><div class="linda">'+av('Linda',C.linda)+'<div><div class="who">Linda</div><div class="lx">'+c.badLinda+'</div></div></div><button class="revbtn" id="dc-rev">See what should have happened</button><div class="finbox" id="dc-fin">'+c.fin+'</div></div>';el.querySelector('#dc-rev').onclick=function(){el.querySelector('#dc-fin').classList.add('show');this.disabled=true;this.textContent='Stopping is always the right call';this.style.borderColor='var(--green)';this.style.color='var(--green)';markDone();};};
+}
+function wireTap(c,el){
+  var opened=[];var trs=el.querySelectorAll('.tr');
+  trs.forEach(function(tr){tr.querySelector('.th').onclick=function(){var isOpen=tr.classList.contains('open');trs.forEach(function(x){x.classList.remove('open');});if(!isOpen){tr.classList.add('open');var nn=tr.dataset.n;if(opened.indexOf(nn)<0)opened.push(nn);}if(opened.length===trs.length){el.querySelector('#tap-done').style.display='block';markDone();}};});
+}
+function wireHold(c,el){
+  var btn=el.querySelector('#holdbtn'),pr=el.querySelector('#holdpr'),lb=el.querySelector('#hold-lb');var CIRC=427,MS=2500,start=0,raf=null,fin=false;
+  function tick(t){var p=Math.min((t-start)/MS,1);pr.style.strokeDashoffset=CIRC*(1-p);if(p>=1){succeed();return;}raf=requestAnimationFrame(tick);}
+  function down(e){e.preventDefault();if(fin)return;btn.classList.add('on');lb.textContent='Hold steady\u2026';start=performance.now();vibe(6);raf=requestAnimationFrame(tick);}
+  function up(){if(fin)return;cancelAnimationFrame(raf);btn.classList.remove('on');var p=(performance.now()-start)/MS;if(start&&p<1){pr.style.strokeDashoffset=CIRC;lb.textContent=c.fail;vibe([40,20,40]);setTimeout(function(){lb.textContent='Press and hold';},2200);}}
+  function succeed(){fin=true;btn.classList.remove('on');btn.classList.add('done');btn.querySelector('.ic').innerHTML='&#10003;';btn.querySelector('.lb').textContent='done';lb.style.color='var(--green)';lb.textContent=c.done;vibe([12,30,12,30,18]);confetti();markDone();}
+  btn.addEventListener('pointerdown',down);btn.addEventListener('pointerup',up);btn.addEventListener('pointerleave',up);btn.addEventListener('pointercancel',up);
+}
+function wireRecap(c,el){var items=el.querySelectorAll('.recap-item');var i=0;(function step(){if(i<items.length){items[i].classList.add('in');i++;setTimeout(step,400);}else{markDone();}})();}
+
+/* ---------- NAV ---------- */
+function go(n){if(n<0||n>=CARDS.length)return;cur=n;render();}
+function advance(){var card=CARDS[cur];var locked=GATED[card.type]&&!done[cur];if(locked)return;if(cur<CARDS.length-1){vibe(6);go(cur+1);}}
+fwd.onclick=function(){if(fwd.classList.contains('locked'))return;advance();};
+back.onclick=function(){if(cur>0)go(cur-1);};
+
+stage.addEventListener('click',function(e){var card=CARDS[cur];if(!ADVANCE[card.type])return;if(GATED[card.type]&&!done[cur])return;if(e.target.closest('button,a,input,.flip,.opt,.oitem,.tr,.ck,.dc-btn,.op-btn,.holdbtn,.subbtn,.revbtn,.tf-btn,.tf-nx,.spot,.biobtn'))return;advance();});
+
+var sx=0,sy=0,sw=false;
+stage.addEventListener('pointerdown',function(e){sx=e.clientX;sy=e.clientY;sw=true;});
+stage.addEventListener('pointerup',function(e){if(!sw)return;sw=false;var dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.6){if(dx<0){advance();}else if(cur>0){go(cur-1);}}});
+
+/* DRAWER */
+document.getElementById('menu-btn').onclick=function(){buildDrawer();drawer.classList.add('open');};
+document.getElementById('drawer-x').onclick=function(){drawer.classList.remove('open');};
+drawer.onclick=function(e){if(e.target===drawer)drawer.classList.remove('open');};
+function buildDrawer(){var cardSec=CARDS[cur].sec;drawerList.innerHTML='';SECTIONS.forEach(function(nm,i){var st=(i<cardSec?'done':(i===cardSec?'cur':''));var dot=st==='done'?'\u2713':(i+1);var row=document.createElement('div');row.className='sl '+st;row.innerHTML='<div class="sd">'+dot+'</div><div class="sn">'+nm+'</div>';row.onclick=function(){drawer.classList.remove('open');go(firstOfSec[i]);};drawerList.appendChild(row);});}
+
+/* BIO POPUP */
+var bio=document.getElementById('bio');
+function openBio(title,rows){var body=document.getElementById('bio-body');var html='';rows.forEach(function(r){html+='<div class="prow"><div class="pi '+r.c+'">&#9679;</div><div><div class="pl '+r.c+'">'+r.l+'</div><div class="pt">'+r.t+'</div></div></div>';});document.getElementById('bio-title').textContent=title;body.innerHTML=html;bio.classList.add('open');}
+function closeBio(){bio.classList.remove('open');}
+document.getElementById('bio-x').onclick=closeBio;
+bio.onclick=function(e){if(e.target===bio)closeBio();};
+
+/* END COURSE */
+function endCourse(){SCORM.done();try{window.open('','_self');window.close();}catch(e){}var app=document.getElementById('app');app.innerHTML='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px"><div class="done-ring" style="margin-bottom:18px">&#10003;</div><h2 style="font-size:24px;font-weight:800;color:var(--primary);margin-bottom:10px">Course complete</h2><p style="font-size:17px;line-height:1.6;color:var(--muted)">Your progress has been recorded. You can close this window now.</p></div>';}
+
+function restart(){cur=0;done={};reached={0:true};try{localStorage.removeItem('sr-msi-c2b');}catch(e){}render();}
+
+/* INIT */
+SCORM.init();buildTicks();
+var resumed=load();if(resumed!==null&&resumed>0)cur=resumed;
+render();
+</script></body></html>
