@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Violence and Harassment Prevention · Sunrise Ridge</title>
+<title>Violence and Harassment Prevention</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -563,9 +563,9 @@ var SHOW_CLOCK=true;
 var SCORM=(function(){var api=null;function find(w){var n=0;while(w.API==null&&w.parent&&w.parent!=w&&n++<8)w=w.parent;return w.API;}
 return{init:function(){try{api=find(window);if(api)api.LMSInitialize("");}catch(e){}},done:function(){try{if(api){api.LMSSetValue("cmi.core.lesson_status","completed");api.LMSCommit("");}}catch(e){}}};})();
 
-var PORTRAITS={"Mrs. Grace":"https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Grace_Okinwo.png"};
+var PORTRAITS={"Mrs. Grace":"https://raw.githubusercontent.com/sandu17-gif/Course-Images/main/Grace_Okinwo.png","Linda":"img/Linda.jpg"};
 function initialOf(n){return n.replace('Mrs. ','').replace('Mr. ','').trim().charAt(0);}
-function av(name,color){var p=PORTRAITS[name];var i=initialOf(name);if(p){return '<div class="av" style="background:'+color+';padding:0;overflow:hidden"><img src="'+p+'" onerror="this.parentNode.textContent=\''+i+'\';this.remove()" style="width:100%;height:100%;object-fit:cover" alt=""></div>';}return '<div class="av" style="background:'+color+'">'+i+'</div>';}
+function av(name,color){var p=PORTRAITS[name];var i=initialOf(name);if(p){return '<div class="av" style="background:'+color+';padding:0;overflow:hidden;border:2px solid '+color+';box-sizing:border-box"><img src="'+p+'" onerror="this.parentNode.textContent=\''+i+'\';this.remove()" style="width:100%;height:100%;object-fit:cover" alt=""></div>';}return '<div class="av" style="background:'+color+'">'+i+'</div>';}
 var C={mia:'#0E9DBD',linda:'#0475AC',grace:'#7C3AED',park:'#B45309',kim:'#0891B2'};
 function portraitOf(n){return PORTRAITS[n]||('https://picsum.photos/seed/port-'+n.replace(/\W/g,'')+'/600/800');}
 var SECIMG=["img/RCW-02-S01.png","img/RCW-02-S02.png","img/RCW-02-S03.png","img/RCW-02-S04.png","img/RCW-02-S05.png"];
